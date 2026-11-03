@@ -1,5 +1,8 @@
 # BlaBlaBot — browser-based voice language tutor (no server)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Deploy](https://github.com/skindar/german-tutor-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/skindar/german-tutor-web/actions/workflows/deploy.yml)
+
 The same tutor experience as the native version (`../backend` + `../frontend`),
 but **all ML runs inside the browser tab** — no Python server, no ffmpeg, no
 Ollama. After the first download the models are cached by the browser
@@ -12,7 +15,7 @@ Ollama. After the first download the models are cached by the browser
 
 | Layer | Native version | Browser version |
 |---|---|---|
-| Tutor LLM | mlx-lm Qwen3-4B | **WebLLM** (`@mlc-ai/web-llm`) Qwen3-1.7B q4f16 (default), switchable in settings |
+| Tutor LLM | mlx-lm Qwen3-4B | **WebLLM** (`@mlc-ai/web-llm`) Gemma-3-1B-IT q4f16 (default), switchable in settings |
 | ASR | mlx-whisper large-v3-turbo | **transformers.js** (`@huggingface/transformers`) whisper tiny/base/small, WebGPU (WASM fallback) |
 | TTS | Ollama Phonon | **phonon-tts** (official WASM port of the same gradium Phonon models, q8 ~75 MB, WebGPU/CPU, streaming) + system voices as a fallback |
 | Translation | second LLM call | same: second LLM call (temp 0.2) + UI-language checks |
@@ -26,8 +29,35 @@ pipeline with per-stage timings (`src/lib/engine.ts` ←
 disabled with the request flag + `/no_think` (as the native version did);
 `<think>` blocks are stripped by the parser regardless.
 
-Target languages to learn: German, English, French, Spanish, Portuguese.
-UI language: Russian / English.
+Target languages to learn: German, English, French, Spanish, Portuguese —
+all five work out of the box (per-language TTS models/voices, per-language
+history and vocabulary, per-language prompts; Whisper covers all five).
+The offline dictionary is German→Russian only and loads as a lazy 2.2 MB
+chunk on first use. UI language: Russian / English.
+
+**Diary mode** (sidebar switch): the tutor becomes a supportive listener —
+short reactions and listening questions only ("Und was war dann?"), never
+correcting aloud, never changing the topic. Every line the student says is
+logged to the Diary tab verbatim, with the UI-language translation and the
+corrected version when there were grammar mistakes. See
+`docs/tutor-methodology.md` for the conversation-tutor methodology.
+
+## Google Drive sync (chat, flashcards, diary)
+
+No server: Google Identity Services' implicit token flow + the Drive v3 REST
+API with the narrow `drive.file` scope — the app can only see the files it
+created itself. Data lives in a `BlaBlaBot` folder as plain JSON files
+(`vocab.json`, `history-<lang>.json`, `diary.json`).
+
+1. Create an OAuth Client ID (type *Web application*) in Google Cloud Console;
+   add your site URL (e.g. `https://<owner>.github.io`) under
+   *Authorized JavaScript origins*. No client secret is involved.
+2. Paste the Client ID into Settings → Google Drive and press
+   "Sign in with Google" (consent screen needs the Drive scope enabled).
+3. With auto-sync on, every chat turn, flashcard change and diary entry is
+   uploaded (debounced); on sign-in the app pulls the Drive state and merges
+   (vocabulary: union by id, last-write-wins; diary: union by id; chat:
+   the newer tail wins). The access token lives in sessionStorage only.
 
 ## Running
 
@@ -44,7 +74,7 @@ npm run build        # → web/dist/
 npm run preview      # local preview of the build
 ```
 
-**First run:** the app downloads whisper-base (~80 MB), Qwen3-1.7B (~1 GB)
+**First run:** the app downloads whisper-base (~80 MB), Gemma-3-1B-IT (~0.7 GB)
 and the Phonon model (~75 MB) automatically; progress is visible in the model
 status. Afterwards everything loads from the cache — no network needed.
 
@@ -54,20 +84,37 @@ Two engines in the settings:
 
 - **Phonon** — the same models the native version uses via Ollama, through the
   official [`phonon-tts`](https://www.npmjs.com/package/phonon-tts) package
-  (WASM/WebGPU, streaming 24 kHz, ~50–100 ms to first sound).
-  German: phonon-40m-de with 13 voices (Annika, Anton, Henrik, Jette,
-  Josefine, Jule, Leon, Lotta, Mats, Mika, Mirko, Nele, Svea).
-  English: the public phonon-31m-en (Apache 2.0) + the gradium/phonon-voices
-  catalog. French/Spanish/Portuguese: phonon-40m-XX (gated on HF).
+  (WASM/WebGPU, streaming 24 kHz, ~50–100 ms to first sound). Per target
+  language:
+  - **German** — phonon-40m-de with 13 voices (Annika, Anton, Henrik, Jette,
+    Josefine, Jule, Leon, Lotta, Mats, Mika, Mirko, Nele, Svea). The model is
+    self-hosted (local `public/models/` in dev, a GitHub Release in prod —
+    see below). If the configured URL is unreachable, the app automatically
+    falls back to the multilingual model with the same voices.
+  - **English** — the public phonon-31m-en (Apache 2.0) + the
+    gradium/phonon-voices catalog (25 voices).
+  - **French/Spanish/Portuguese** — the public mirror of
+    phonon-40m-multilingual (en/fr/de/es/pt) + the per-language catalog
+    voices (fr 15, es 25, pt 12). The per-language gradium models are gated
+    on HF, so they load only from a URL you host yourself (see below).
+  All files come from public HF repos pinned to a commit; the voice catalog
+  (gradium/phonon-voices, Apache 2.0) is one flat `voices/<id>.safetensors`
+  set compatible with every model size. Only the selected voice is
+  prefetched (~250 KB); the rest of the language's catalog loads on first
+  use and is cached.
 - **System voice** — the browser's speechSynthesis (0 MB). If no voice exists
   for the target language, the app reports it honestly instead of reading the
   text in the wrong language.
 
 ### Where the Phonon model files come from
 
-The HF repos are **gated**, so a visitor's browser cannot download them
-directly, and the model is not stored in git either. Instead the app fetches
-the files from a configurable URL ("Phonon model URL" in the settings):
+The default bases cover every language without any setup: English loads
+`gradium/phonon-31m-en` from HF directly, French/Spanish/Portuguese load the
+public multilingual mirror (`empyrealworks/Phonon-40M-multilingual`, a
+byte-for-byte copy of the gated gradium/phonon-40m-multilingual — weights
+CC BY-NC 4.0), and German first tries its configured URL. A self-hosted
+per-language model (better quality than the multilingual one) still works:
+set the "Phonon model URL" in the settings to
 
 - locally for dev: `/models/phonon-40m-de/` (default; files in
   `web/public/models/`, git-ignored);
@@ -75,11 +122,12 @@ the files from a configurable URL ("Phonon model URL" in the settings):
   `https://github.com/<owner>/<repo>/releases/download/<tag>/` — upload the
   files once as release assets with
   `./scripts/publish-phonon.sh owner/repo phonon-40m-de-v1`;
-- a public (non-gated) HF mirror: `hf://owner/repo`.
+- any public (non-gated) HF repo: `hf://owner/repo`.
 
-Files are cached in the Cache API — no network on subsequent runs.
-The German weights are CC BY-NC 4.0 (non-commercial); credit the source when
-redistributing.
+If the URL is unreachable, the app falls back to the multilingual model with
+the language's catalog voices instead of failing. Files are cached in the
+Cache API — no network on subsequent runs. The 40m weights are
+CC BY-NC 4.0 (non-commercial); credit the source when redistributing.
 
 ## Hosting on GitHub Pages
 
@@ -109,8 +157,10 @@ silence — verified).
 - Model picker includes a live download progress per model; sizes come from
   webllm's `vram_required_MB` (the honest tab-memory cost).
 - One LLM in memory; switching reloads it (first switch also downloads).
-- Known quirk of Qwen3-1.7B: occasional junk characters in chip translations
-  (model-level); Qwen3-4B or Gemma-4 E2B in the picker are noticeably cleaner.
+- Curated model list (small → large): Gemma-3-1B-IT (default, best
+  multilingual), Llama-3.2-1B-Instruct, Qwen2.5-1.5B-Instruct, Gemma-4 E2B.
+  The 1B models run the tiny-tier pipeline (2-key tutor schema + separate
+  corrections/translation/suggestions calls).
 
 ## Structure
 
@@ -135,3 +185,10 @@ web/
 │   └── data/deu-rus.json     copy of backend/data/deu-rus.json
 └── dist/                     production build (npm run build)
 ```
+
+## License
+
+The code is [MIT-licensed](./LICENSE). The repository ships no model weights:
+the LLM/ASR/TTS models are downloaded by the visitor's browser and governed
+by their own licenses (Gemma Terms of Use, Apache-2.0, CC BY-NC 4.0 — see
+the notes in LICENSE and the Phonon section above).
