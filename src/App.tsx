@@ -341,6 +341,11 @@ function AppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.handsFree])
 
+  // hands-free mic: auto-submit after a short silence pause
+  const recorder = useRecorder(handleBlob, {
+    autoStopOnSilenceMs: settings.handsFree ? HANDS_FREE_PAUSE_MS : undefined,
+  })
+
   const handleText = useCallback(
     (text: string) => {
       if (stage === 'processing') return
@@ -353,11 +358,6 @@ function AppInner() {
     },
     [sendChat, stage, recorder],
   )
-
-  // hands-free mic: auto-submit after a short silence pause
-  const recorder = useRecorder(handleBlob, {
-    autoStopOnSilenceMs: settings.handsFree ? HANDS_FREE_PAUSE_MS : undefined,
-  })
 
   const prevRecorderState = useRef(recorder.state)
   useEffect(() => {
