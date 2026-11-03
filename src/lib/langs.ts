@@ -219,6 +219,35 @@ export const GREETING_RE: Record<TargetLang, RegExp> = {
   pt: /^\s*(ol[áa]|oi|bom\s+dia|boa\s+(tarde|noite))\b/i,
 }
 
+/** "My name is X" — the student introduced themselves */
+export const INTRO_RE: Record<TargetLang, RegExp> = {
+  de: /\b(?:mein\s+name\s+ist|ich\s+hei[ßs]e)\s+([A-ZÄÖÜ][\p{L}-]+)/iu,
+  en: /\b(?:my\s+name\s+is|i\s+am|i'm)\s+([A-Z][\p{L}-]+)/iu,
+  fr: /\b(?:je\s+m'appelle|mon\s+nom\s+est|je\s+suis)\s+([A-ZÀ-Þ][\p{L}-]+)/iu,
+  es: /\b(?:me\s+llamo|mi\s+nombre\s+es|soy)\s+([A-ZÁ-ÚÑ][\p{L}-]+)/iu,
+  pt: /\b(?:meu\s+nome\s+[ée]|chamo-me|eu\s+sou\s+o|eu\s+sou)\s+([A-ZÁ-ÚÃ][\p{L}-]+)/iu,
+}
+
+/** Deterministic reaction to an introduction — never trust a 1B model with it */
+export const INTRO_REACTION: Record<TargetLang, string> = {
+  de: 'Freut mich, {name}!',
+  en: 'Nice to meet you, {name}!',
+  fr: 'Enchanté, {name} !',
+  es: '¡Mucho gusto, {name}!',
+  pt: 'Prazer em conhecer você, {name}!',
+}
+
+export const INTRO_REACTION_TR: Record<TargetLang, { ru: string; en: string }> = {
+  de: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+  en: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+  fr: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+  es: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+  pt: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+}
+
+/** Questions that ask for the student's name (any language mix) */
+export const NAME_QUESTION_RE = /name|hei[ßs]t|appelle|llamo|nome|зват/i
+
 export const TUTOR_FAREWELL: Record<TargetLang, string> = {
   de: 'Tschüss! Es war schön, mit dir zu sprechen. Bis bald!',
   en: 'Bye! It was great talking to you. See you soon!',

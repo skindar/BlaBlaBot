@@ -49,6 +49,21 @@ function tokenize(s: string): string[] {
   return s.toLowerCase().match(WORD_RE) ?? []
 }
 
+/** True when the change looks like a grammar fix, not a rewrite:
+ *  the two words share a stem (meine→meiner, hilfe→helfe, Monate→Monaten).
+ *  Rejects person swaps (me→you), name respellings (Walandin→Valentin)
+ *  and any other meaning change the "fix" model invented. */
+function sameStem(from: string, to: string): boolean {
+  const a = from.toLowerCase()
+  const b = to.toLowerCase()
+  if (!a || !b) return false
+  if (a === b) return false
+  const min = Math.min(a.length, b.length)
+  let common = 0
+  while (common < min && a[common] === b[common]) common++
+  return common >= 2 || a.startsWith(b) || b.startsWith(a)
+}
+
 /** Max share of words that may change before "fix" becomes "rewrite" */
 const MAX_CHANGE_RATIO = 0.5
 
@@ -67,17 +82,22 @@ export function diffToCorrections(original: string, fixed: string, max = 3): Cor
   }
   if (changes.length === 0) return []
   if (changes.length / Math.max(1, aLow.length) > MAX_CHANGE_RATIO) return []
-  return changes.slice(0, max).map(({ i, from, to }) => {
+  const out: Correction[] = []
+  for (const { i, from, to } of changes) {
+    // names and person/meaning swaps are not grammar: drop the invented fix
+    if (!sameStem(from, to)) continue
     const lo = Math.max(0, i - 1)
     const hi = Math.min(aTokens.length, i + 2)
     const origWindow = aTokens.slice(lo, hi).join(' ')
     const fixedWindow = bTokens.slice(lo, hi).join(' ')
-    return {
+    out.push({
       original: origWindow || from,
       corrected: fixedWindow || to,
       explanation: '',
-    }
-  })
+    })
+    if (out.length >= max) break
+  }
+  return out
 }
 
 function extractFixed(raw: string): string | null {

@@ -322,6 +322,8 @@ export function sentenceFixSystemPrompt(targetLang: TargetLang): string {
   return `You fix grammar mistakes in ONE short beginner ${target} sentence.
 Fix ONLY grammar: articles, case endings, verb forms, word order.
 Keep every other word exactly as written; never answer, never explain.
+Never change NAMES or place names — copy proper nouns letter for letter.
+Never swap I/you/me/my/your and never add or remove words.
 Return ONLY JSON: {"fixed": "the corrected sentence"}
 If the sentence is already correct, return it unchanged.`
 }

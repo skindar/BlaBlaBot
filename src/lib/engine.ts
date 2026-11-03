@@ -37,6 +37,7 @@ import {
   vocabNotRealDefaultComment,
   type LlmMessage,
 } from '../prompts'
+import { INTRO_RE, NAME_QUESTION_RE } from './langs'
 import { tinyCorrections } from './corrections'
 import { contextWindowFor } from './llm'
 import { conversation, diary, lookupDictionary, tutorSession, vocab } from './store'
@@ -564,7 +565,20 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   } else {
     // ---- Full tier (Gemma-4 E2B, Qwen2.5-1.5B): same scenario progression,
     //  but the model writes the whole reply around the prescribed question. ----
-    const question = prescribedQuestion(scenario, session)
+    let question = prescribedQuestion(scenario, session)
+    let sessionForGrounding = session
+    // The student already answered the prescribed question with an
+    // introduction ("My name is Valentin") — prescribing the name question
+    // again would make the tutor ask for a name it just heard.
+    const fullIntroMatch = INTRO_RE[targetLang].exec(userText)
+    if (fullIntroMatch && question !== null && NAME_QUESTION_RE.test(question)) {
+      const i = Math.max(session.nextIndex, 1)
+      const nextTurn = i < scenario.turns.length ? scenario.turns[i] : null
+      if (nextTurn) {
+        question = nextTurn.question
+        sessionForGrounding = { ...session, nextIndex: i, stayCount: 0 }
+      }
+    }
     const builtMessages = buildTutorMessages(
       history,
       userText,
@@ -629,7 +643,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     }
     suggestions = prescribedChips(scenario, session)
     if (suggestions.length === 0) suggestions = cleanSuggestions(parsed.suggestions, uiLang, targetLang)
-    tutorSession.set(targetLang, advanceFullSession(scenario, session))
+    tutorSession.set(targetLang, advanceFullSession(scenario, sessionForGrounding))
 
     // calibrate the token estimator with the real measurement
     if (tutorOption && tutorCall.perf?.promptTokens) {

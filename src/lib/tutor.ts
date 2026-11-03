@@ -15,6 +15,9 @@ import {
 import {
   FAREWELL_RE,
   GREETING_RE,
+  INTRO_RE,
+  INTRO_REACTION,
+  NAME_QUESTION_RE,
   NEGATION_RE,
   TUTOR_FAREWELL,
   TUTOR_FAREWELL_TRANSLATION,
@@ -149,6 +152,17 @@ export function polishReply(
   opts: { maxWords: number; allowZeroQuestions?: boolean },
 ): string {
   let cleaned = stripTtsJunk(reply)
+  // drop repeated sentences ("I am from London. I am from London. …") — a
+  // template answer repeated inside the prescribed question happens on 1B
+  const seenSentences = new Set<string>()
+  cleaned = sentences(cleaned)
+    .filter(s => {
+      const key = s.toLowerCase().replace(/[.!?…]+$/, '').trim()
+      if (!key || seenSentences.has(key)) return false
+      seenSentences.add(key)
+      return true
+    })
+    .join(' ')
   const parts = sentences(cleaned)
   const questions = parts.filter(s => s.includes('?'))
   if (questions.length > 1) {
@@ -336,6 +350,56 @@ export async function runTinyTutorTurn(args: TinyTutorArgs): Promise<TutorTurnRe
   const userAsked = TARGET_WH_RE[targetLang].test(userText) || userText.includes('?')
   const turn = currentTurn(scenario, session)
   const wordCount = userText.trim().split(/\s+/).filter(Boolean).length
+
+  // 1.4 The student introduced themselves — acknowledge the name and move on.
+  //  "My name is Valentin, what is your name?" must never bounce back to
+  //  "What is your name?": the name question counts as answered.
+  const introMatch = INTRO_RE[targetLang].exec(userText)
+  const nameQuestionActive =
+    session.nextIndex === 0 || (turn !== null && NAME_QUESTION_RE.test(turn.question))
+  if (introMatch && nameQuestionActive) {
+    const studentName = introMatch[1]
+    const reaction = INTRO_REACTION[targetLang].replace('{name}', studentName)
+    const i = Math.max(session.nextIndex, 1)
+    const nextTurn = i < scenario.turns.length ? scenario.turns[i] : null
+    if (nextTurn) {
+      return {
+        move: 'advance',
+        method: 'template',
+        reply: polishReply(`${reaction} ${nextTurn.question}`, { maxWords: maxWordsFor(level) + 6 }),
+        suggestions: turnChips(nextTurn),
+        session: { ...session, nextIndex: i + 1, stayCount: 0, lastQuestion: nextTurn.question },
+        question: nextTurn.question,
+        parts: {
+          reaction,
+          fixed: nextTurn.question,
+          fixedTr: nextTurn.questionTr,
+        },
+      }
+    }
+    // the intro scenario is exhausted — rotate with a transition
+    const next = nextScenario(scenario)
+    const question = next.turns[0].question
+    return {
+      move: 'advance',
+      method: 'template',
+      reply: polishReply(`${reaction} ${question}`, { maxWords: maxWordsFor(level) + 6 }),
+      suggestions: turnChips(next.turns[0]),
+      session: {
+        scenarioId: next.id,
+        nextIndex: 1,
+        topicKey: session.topicKey,
+        stayCount: 0,
+        lastQuestion: question,
+      },
+      question,
+      parts: {
+        reaction,
+        fixed: question,
+        fixedTr: next.turns[0].questionTr,
+      },
+    }
+  }
 
   // 1.5 Opening: a bare greeting before the first question — greet back
   //  warmly and ask the scenario's first question. Deterministic: a 1B model
