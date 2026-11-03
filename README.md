@@ -1,7 +1,7 @@
 # BlaBlaBot — browser-based voice language tutor (no server)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Deploy](https://github.com/skindar/german-tutor-web/actions/workflows/deploy.yml/badge.svg)](https://github.com/skindar/german-tutor-web/actions/workflows/deploy.yml)
+[![Deploy](https://github.com/skindar/BlaBlaBot/actions/workflows/deploy.yml/badge.svg)](https://github.com/skindar/BlaBlaBot/actions/workflows/deploy.yml)
 
 The same tutor experience as the native version (`../backend` + `../frontend`),
 but **all ML runs inside the browser tab** — no Python server, no ffmpeg, no
