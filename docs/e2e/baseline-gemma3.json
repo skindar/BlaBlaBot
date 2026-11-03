@@ -1,0 +1,747 @@
+{
+  "model": "gemma-3-1b",
+  "personas": [
+    {
+      "persona": "p1-quiet-a1",
+      "level": "A1",
+      "turns": [
+        {
+          "user": "Guten Tag.",
+          "reply": "Hallo, schön, wie geht es dir heute?",
+          "user_translation": "Здравствуйте.",
+          "translation": "Здравствуйте, как дела сегодня?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Was hast du heute gemacht?",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 1643,
+            "corrections_ms": 945,
+            "translation_ms": 375,
+            "tts_ms": 881,
+            "total_ms": 3847
+          }
+        },
+        {
+          "user": "Ich heiße Sascha.",
+          "reply": "Hallo Sascha! Freut mich zu kennen.  Was hast du heute gerne gemacht?",
+          "user_translation": "Я называюсь Саша.",
+          "translation": "Привет, Саша! Рад познакомиться. Что ты сегодня хорошо провел?",
+          "corrections": [
+            {
+              "original": "Ich heiße Sascha.",
+              "corrected": "Sascha heiße ich.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Wie geht es dir?",
+              "translation": ""
+            },
+            {
+              "text": "Mir geht es gut.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe Zeit mit Freunden.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 645,
+            "corrections_ms": 1976,
+            "suggestions_ms": 692,
+            "translation_ms": 696,
+            "tts_ms": 0,
+            "total_ms": 4010
+          }
+        },
+        {
+          "user": "Ich komme aus Russland.",
+          "reply": "Das ist interessant! Hast du schon eine neue Erfahrung gemacht?",
+          "user_translation": "Я из России.",
+          "translation": "Это интересно! У меня уже была новая?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich habe heute einen Film gesehen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe ein Buch gelesen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 515,
+            "corrections_ms": 1683,
+            "suggestions_ms": 4662,
+            "translation_ms": 689,
+            "tts_ms": 0,
+            "total_ms": 7552
+          }
+        },
+        {
+          "user": "Ich wohne in Moskau.",
+          "reply": "Was ist das Aufregendste, das du in letzter Zeit gemacht hast?",
+          "user_translation": "Я живу в Москве.",
+          "translation": "Что самое интересное произошло в последнее время?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Mir ist das Lesen von Büchern sehr gut",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe mir ein neues Hobby angelegt",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 602,
+            "corrections_ms": 1651,
+            "suggestions_ms": 668,
+            "translation_ms": 504,
+            "tts_ms": 0,
+            "total_ms": 3426
+          }
+        },
+        {
+          "user": "Ja, ich trinke Kaffee.",
+          "reply": "Super!  Hast du schon einmal ein anderes Getränk ausprobiert?",
+          "user_translation": "Я пью кофе.",
+          "translation": "У него уже есть?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich habe noch nie etwas anderes probiert.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe früher keinen anderen getrunken.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 629,
+            "corrections_ms": 1429,
+            "suggestions_ms": 1394,
+            "translation_ms": 689,
+            "tts_ms": 0,
+            "total_ms": 4143
+          }
+        },
+        {
+          "user": "Mit Milch.",
+          "reply": "Das ist eine tolle Idee!  Was ist denn dein Lieblingsdrink?",
+          "user_translation": "С утра.",
+          "translation": "Это отличная идея! Что твой любимый напиток?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich mag Wasser",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag Saft",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag Kaffee",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 618,
+            "corrections_ms": 1366,
+            "suggestions_ms": 568,
+            "translation_ms": 928,
+            "tts_ms": 0,
+            "total_ms": 3481
+          }
+        },
+        {
+          "user": "Und du? Was trinkst du morgens?",
+          "reply": "Morgenbier, natürlich! Was trinkst du dann?",
+          "user_translation": "Вы? Что вы обычно делаете утром?",
+          "translation": "Утробу, конечно! Что ты пьёшь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "[\"Morgenbier, was trinkst du?\", \"Ich trinke Morgenbier.\", \"Ich möchte Morgenbier.\"]",
+              "translation": ""
+            },
+            {
+              "text": "[\"Ich möchte Morgenbier.\", \"Ich trinke Morgenbier.\", \"Morgenbier ist gut.\"]",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 615,
+            "corrections_ms": 926,
+            "suggestions_ms": 4452,
+            "translation_ms": 843,
+            "tts_ms": 0,
+            "total_ms": 6836
+          }
+        },
+        {
+          "user": "Ich esse Brot mit Käse.",
+          "reply": "Das ist ein schönes Frühstück! Was machst du gerne in deiner Freizeit?",
+          "user_translation": "Я ем хлеб с сыром.",
+          "translation": "Это прекрасное утро! Чем обычно занимаешься в свободное время?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich mag Eis.",
+              "translation": ""
+            },
+            {
+              "text": "Ich lese Bücher.",
+              "translation": ""
+            },
+            {
+              "text": "Ich gehe raus.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 754,
+            "corrections_ms": 1436,
+            "suggestions_ms": 724,
+            "translation_ms": 608,
+            "tts_ms": 0,
+            "total_ms": 3523
+          }
+        }
+      ]
+    },
+    {
+      "persona": "p2-chatty-a1",
+      "level": "A1",
+      "turns": [
+        {
+          "user": "Hallo! Mir geht es gut, danke.",
+          "reply": "Wie geht es dir? Was hast du heute gerne gemacht?",
+          "user_translation": "Здравствуйте, всё хорошо, спасибо.",
+          "translation": "Как дела? Что ты сегодня хорошо делал?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Mir geht es gut, ich habe einen Film gesehen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe ein Buch gelesen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 1294,
+            "corrections_ms": 1485,
+            "suggestions_ms": 624,
+            "translation_ms": 884,
+            "tts_ms": 0,
+            "total_ms": 4288
+          }
+        },
+        {
+          "user": "Ich habe Hobby Fußball.",
+          "reply": "Das ist toll! Hast du noch ein Lieblings-Team?",
+          "user_translation": "У меня хобби - футбол.",
+          "translation": "Это здорово! У тебя есть любимый клуб?",
+          "corrections": [
+            {
+              "original": "Ich habe Hobby Fußball.",
+              "corrected": "Ich habe Fußball als Hobby.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich mag das Team Bayern",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag das Team Real Madrid",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag das Team Borussia Dortmund",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 447,
+            "corrections_ms": 1533,
+            "suggestions_ms": 889,
+            "translation_ms": 794,
+            "tts_ms": 0,
+            "total_ms": 3664
+          }
+        },
+        {
+          "user": "Ich spiele Fußball mit Freunde.",
+          "reply": "Wie viele Freunde spielst du denn gerne?",
+          "user_translation": "Я играю в футбол с друзьями.",
+          "translation": "Сколько друзей ты любишь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich mag viele Freunde",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag ein paar Freunde",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 398,
+            "corrections_ms": 1934,
+            "suggestions_ms": 831,
+            "translation_ms": 803,
+            "tts_ms": 0,
+            "total_ms": 3968
+          }
+        },
+        {
+          "user": "Gestern ich spiele Fußball zwei Stunden.",
+          "reply": "Was hast du gestern in der Fußball-Pause gemacht?",
+          "user_translation": "Вчера я играл в футбол два часа.",
+          "translation": "У меня вчера в футбольной паутине что-то было.",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Was haben Sie gestern im Fußball gemacht?",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe die Bälle in die Hand genommen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 523,
+            "corrections_ms": 2048,
+            "suggestions_ms": 666,
+            "translation_ms": 1105,
+            "tts_ms": 0,
+            "total_ms": 4343
+          }
+        },
+        {
+          "user": "Ja, Fußball macht Spaß.",
+          "reply": "Was ist denn dein Lieblings-Spiel in der Fußball-Pause?",
+          "user_translation": "Футбол - это весело.",
+          "translation": "Что тебе больше всего нравится делать во время перерыва в футбол?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich mag das Spiel mit den Ballzügen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag das Spiel mit den Stoßen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 578,
+            "corrections_ms": 1624,
+            "suggestions_ms": 4503,
+            "translation_ms": 921,
+            "tts_ms": 0,
+            "total_ms": 7626
+          }
+        },
+        {
+          "user": "Was machst du am Wochenende?",
+          "reply": "Hast du am Wochenende einen Plan?",
+          "user_translation": "Что ты делаешь по выходным?",
+          "translation": "У тебя был ли план на прошлой неделе?",
+          "corrections": [
+            {
+              "original": "Was machst du am Wochenende?",
+              "corrected": "Was hast du am Wochenende?",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 452,
+            "corrections_ms": 1952,
+            "suggestions_ms": 679,
+            "translation_ms": 1197,
+            "tts_ms": 0,
+            "total_ms": 4280
+          }
+        },
+        {
+          "user": "Ich habe kein Zeit am Sonntag.",
+          "reply": "Was machst du so gerne, wenn du nicht viel Zeit hast?",
+          "user_translation": "У меня нет времени по воскресенье.",
+          "translation": "Что тебе обычно интересно делать, когда времени совсем мало?",
+          "corrections": [
+            {
+              "original": "Ich habe kein Zeit am Sonntag.",
+              "corrected": "Ich habe keine Zeit am Sonntag.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich mag Musik hören.",
+              "translation": ""
+            },
+            {
+              "text": "Ich liebe es zu lesen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich möchte Sport machen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 662,
+            "corrections_ms": 1837,
+            "suggestions_ms": 820,
+            "translation_ms": 972,
+            "tts_ms": 0,
+            "total_ms": 4292
+          }
+        },
+        {
+          "user": "Ok, tschüss!",
+          "reply": "Hallo! Bis bald! Wie geht es dir?",
+          "user_translation": "",
+          "translation": "Здравствуйте! До скорой встречи! Как вы?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Hallo, mir geht es gut, danke!",
+              "translation": ""
+            },
+            {
+              "text": "Mir geht gut, wie geht es dir?",
+              "translation": ""
+            },
+            {
+              "text": "Mir geht gut, alles gut.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 598,
+            "corrections_ms": 871,
+            "suggestions_ms": 825,
+            "translation_ms": 740,
+            "tts_ms": 0,
+            "total_ms": 3035
+          }
+        }
+      ]
+    },
+    {
+      "persona": "p3-past-a2",
+      "level": "A2",
+      "turns": [
+        {
+          "user": "Hallo! Ich bin Maria. Wie geht es dir?",
+          "reply": "Hallo Maria! Mir geht es gut, und dir? Was machst du heute gerne?",
+          "user_translation": "Здравствуйте, я Мария. Как дела?",
+          "translation": "Здравствуйте, Мария! У вас всё хорошо, и вы? Чем вы сейчас занимаетесь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich möchte Deutsch üben!",
+              "translation": ""
+            },
+            {
+              "text": "Du magst gerne Filme schauen?",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 1448,
+            "corrections_ms": 1594,
+            "translation_ms": 692,
+            "tts_ms": 0,
+            "total_ms": 3735
+          }
+        },
+        {
+          "user": "Am Wochenende ich habe einen Film gesehen.",
+          "reply": "Das ist schön! Hast du noch andere Filme in der Enge?",
+          "user_translation": "Это субботний вечер.",
+          "translation": "Это красиво. У тебя еще есть другие фильмы в узре былой?",
+          "corrections": [
+            {
+              "original": "Am Wochenende ich habe einen Film gesehen.",
+              "corrected": "Am Wochenende habe ich einen Film gesehen.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich möchte einen Film über Abenteuer",
+              "translation": ""
+            },
+            {
+              "text": "Ich mag Science-Filme",
+              "translation": ""
+            },
+            {
+              "text": "Ich suche etwas Spannendes",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 493,
+            "corrections_ms": 1831,
+            "suggestions_ms": 921,
+            "translation_ms": 832,
+            "tts_ms": 0,
+            "total_ms": 4076
+          }
+        },
+        {
+          "user": "Der Film war sehr gut und interessant.",
+          "reply": "Wie findest du die deutsche Sprache?",
+          "user_translation": "Фильм был очень хорошим и интересным.",
+          "translation": "Как я думаю о немецком языке?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "[\"Mir ist die deutsche Sprache gut, aber...\"]",
+              "translation": ""
+            },
+            {
+              "text": "[\"Ich finde die deutsche Sprache...\"]",
+              "translation": ""
+            },
+            {
+              "text": "[\"Ich mag die deutsche Sprache...\"]",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 379,
+            "corrections_ms": 1661,
+            "suggestions_ms": 715,
+            "translation_ms": 892,
+            "tts_ms": 0,
+            "total_ms": 3648
+          }
+        },
+        {
+          "user": "Ich bin ins Kino gegangen mit mein Freund.",
+          "reply": "Was hast du sonst im Moment gerne gemacht?",
+          "user_translation": "Я пошел в кино с другом.",
+          "translation": "",
+          "corrections": [
+            {
+              "original": "Ich bin ins Kino gegangen mit mein Freund.",
+              "corrected": "Ich bin mit meinem Freund ins Kino gegangen.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich habe gestern einen Film gesehen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe mit meinen Freunden geredet.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe in der Woche Sport gemacht.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 466,
+            "corrections_ms": 1725,
+            "suggestions_ms": 987,
+            "translation_ms": 750,
+            "tts_ms": 0,
+            "total_ms": 3929
+          }
+        },
+        {
+          "user": "Wir haben Pizza gegessen danach.",
+          "reply": "Hast du schon eine neue Serie ausprobiert?",
+          "user_translation": "Мы попили пиццу.",
+          "translation": "У вас уже была новая серия протестирована?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich habe die letzte Woche die Serie gesehen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe die Serie vor ein paar Tagen angesehen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 538,
+            "corrections_ms": 1596,
+            "suggestions_ms": 4497,
+            "translation_ms": 729,
+            "tts_ms": 0,
+            "total_ms": 7361
+          }
+        },
+        {
+          "user": "Und du? Was hast du am Wochenende gemacht?",
+          "reply": "Ja, ich habe ein Buch gelesen!",
+          "user_translation": "У тебя что-то случилось? Что ты делал в эти выходные?",
+          "translation": "Я прочитал книгу.",
+          "corrections": [
+            {
+              "original": "Und du?",
+              "corrected": "Was hast du am Wochenende gemacht?",
+              "explanation": ""
+            },
+            {
+              "original": "Du?",
+              "corrected": "Hast du am Wochenende gemacht?",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich lese ein Buch.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe ein Buch gelesen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 486,
+            "corrections_ms": 1723,
+            "suggestions_ms": 488,
+            "translation_ms": 946,
+            "tts_ms": 0,
+            "total_ms": 3644
+          }
+        },
+        {
+          "user": "Nächste Woche ich besuche meine Eltern.",
+          "reply": "Was hast du am Montag schon vor?",
+          "user_translation": "Следующая неделя я буду посещать родителей.",
+          "translation": "Что ты там за образ сказать там за неделю?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich habe nur gelernt.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe den Morgenkaffee getrunken.",
+              "translation": ""
+            },
+            {
+              "text": "Ich habe gearbeitet.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 526,
+            "corrections_ms": 1512,
+            "suggestions_ms": 885,
+            "translation_ms": 881,
+            "tts_ms": 0,
+            "total_ms": 3804
+          }
+        },
+        {
+          "user": "Ja, gerne! Auf Wiedersehen.",
+          "reply": "Wie fühlst du dich heute besonders?",
+          "user_translation": "Да, пожалуйста.",
+          "translation": "Как вы себя чувствуете сегодня?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Mir geht es gut, danke.",
+              "translation": ""
+            },
+            {
+              "text": "Wie geht es dir?",
+              "translation": ""
+            },
+            {
+              "text": "Ich bin okay.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "llm_ms": 578,
+            "corrections_ms": 981,
+            "suggestions_ms": 648,
+            "translation_ms": 736,
+            "tts_ms": 0,
+            "total_ms": 2945
+          }
+        }
+      ]
+    }
+  ]
+}

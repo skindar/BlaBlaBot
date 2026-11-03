@@ -73,17 +73,22 @@ export interface Settings {
   phononBases: Partial<Record<TargetLang, string>>
   ttsSpeed: number
   showTranslation: boolean
+  /** free-form topic/instructions for the tutor (sidebar "Let's talk about…" textarea) */
   extraPrompt: string
-  /** Google OAuth Client ID (Drive flashcard sync) */
+  /** Google OAuth Client ID (Drive sync) */
   googleClientId: string
-  /** auto-sync flashcards with Google Drive */
+  /** auto-sync flashcards/history/diary with Google Drive */
   driveAutoSync: boolean
+  /** diary mode: the tutor is a supportive listener, user messages go to the diary */
+  diaryMode?: boolean
   /** show the Bench tab (hidden by default — a developer/article tool) */
   showBench?: boolean
 }
 
 export interface VocabItem {
   id: number
+  /** stable id for Drive sync (legacy items get one on first sync) */
+  uid: string
   word: string
   translation: string
   part_of_speech: string
@@ -91,8 +96,23 @@ export interface VocabItem {
   example_translation: string
   known: boolean
   created_at: string
+  /** last change timestamp — the sync merge is last-write-wins per uid */
+  updated_at?: string
   /** target language (absent in old records — treated as de) */
   lang?: TargetLang
+}
+
+/** One diary entry: the student's own words about their day (diary mode) */
+export interface DiaryEntry {
+  uid: string
+  lang: TargetLang
+  /** YYYY-MM-DD (local) */
+  date: string
+  text: string
+  /** the message with the tutor's corrections applied (when there were any) */
+  corrected?: string
+  translation: string
+  created_at: string
 }
 
 export interface ModelHealth {

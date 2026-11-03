@@ -1,14 +1,23 @@
 // Settings modal: every app setting in one place —
-// general, speech, models, tutor.
+// general, speech, models, tutor. The conversation topic and extra
+// tutor context live in the Sidebar ("Let's talk about…").
 
 import { useEffect, useState } from 'react'
 import type { Level, ModelHealth, Settings, ThemeMode, WebHealth, WebModelHealth } from '../types'
 import type { UiLang } from '../i18n'
 import { useI18n } from '../i18n'
-import { TARGET_LANG_LIST, langInfo, phononVoices } from '../lib/langs'
+import { TARGET_LANG_LIST, langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
 import { ASR_MODELS, DEFAULT_ASR_KEY } from '../lib/asr'
 import { LlmEngine, availableLlmModels, llmModelByKey } from '../lib/llm'
 import { ttsEngine } from '../lib/tts'
+import {
+  configureSync,
+  doSignOut,
+  getSyncStatus,
+  signIn as doSignIn,
+  subscribeSync,
+  syncNow,
+} from '../lib/sync'
 
 interface Props {
   settings: Settings
@@ -24,6 +33,69 @@ function dotClass(model: ModelHealth | undefined): string {
   if (model?.state === 'ready') return 'ready'
   if (model?.state === 'error') return 'offline'
   return 'loading'
+}
+
+/** Google Drive sign-in + sync controls (the sync module holds the state) */
+function SyncControls({
+  settings,
+  onChange,
+}: {
+  settings: Settings
+  onChange: (patch: Partial<Settings>) => void
+}) {
+  const t = useI18n()
+  const [sync, setSync] = useState(getSyncStatus())
+
+  useEffect(() => subscribeSync(setSync), [])
+  useEffect(() => {
+    configureSync({ clientId: settings.googleClientId, autoSync: settings.driveAutoSync })
+  }, [settings.googleClientId, settings.driveAutoSync])
+
+  const signIn = () => {
+    void doSignIn().catch(() => undefined)
+  }
+
+  return (
+    <>
+      <div className="group row">
+        <input
+          id="set-drive-autosync"
+          type="checkbox"
+          checked={settings.driveAutoSync}
+          disabled={!sync.signedIn}
+          onChange={e => onChange({ driveAutoSync: e.target.checked })}
+        />
+        <label htmlFor="set-drive-autosync">{t('syncAuto')}</label>
+      </div>
+      {sync.signedIn ? (
+        <div className="group sync-status">
+          <span className="sync-line">
+            {sync.syncing
+              ? t('syncSyncing')
+              : t('syncSignedInAs', { email: sync.email ?? '' })}
+          </span>
+          <button type="button" className="card-btn" onClick={() => void syncNow()} disabled={sync.syncing}>
+            {t('syncNow')}
+          </button>
+          <button type="button" className="reset-btn" onClick={doSignOut}>
+            {t('syncSignOut')}
+          </button>
+        </div>
+      ) : (
+        <div className="group sync-status">
+          <button
+            type="button"
+            className="card-btn primary"
+            onClick={signIn}
+            disabled={!settings.googleClientId || sync.syncing}
+          >
+            {t('syncSignIn')}
+          </button>
+        </div>
+      )}
+      {sync.error && <p className="offline-note">{t('syncError', { error: sync.error })}</p>}
+    </>
+  )
 }
 
 function modelStatus(model: WebModelHealth | undefined, t: (k: string) => string): string {
@@ -63,9 +135,12 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
     }
   }, [settings.ttsEngine, lang, health, t])
 
-  const voice = settings.ttsVoices[lang] ?? ''
   const setVoice = (v: string) => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: v } })
   const phononBase = settings.phononBases[lang] ?? info.phononBase
+  const voice =
+    settings.ttsEngine === 'phonon'
+      ? resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])
+      : settings.ttsVoices[lang] ?? ''
 
   return (
     <div className="modal-overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
@@ -277,19 +352,27 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
           </div>
         </section>
 
+        {/* ---------- Google Drive ---------- */}
+        <section className="settings-section">
+          <h3>{t('syncSection')}</h3>
+          <div className="group">
+            <label htmlFor="set-google-id">{t('googleClientId')}</label>
+            <input
+              id="set-google-id"
+              type="text"
+              value={settings.googleClientId}
+              placeholder="1234567890-xxxxxxxx.apps.googleusercontent.com"
+              onChange={e => onChange({ googleClientId: e.target.value })}
+            />
+            <p className="hint-note">{t('googleClientIdHint')}</p>
+          </div>
+          <SyncControls settings={settings} onChange={onChange} />
+        </section>
+
         {/* ---------- Tutor ---------- */}
         <section className="settings-section">
           <h3>{t('sectionTutor')}</h3>
-          <div className="group">
-            <label htmlFor="set-extra-prompt">{t('extraPrompt')}</label>
-            <textarea
-              id="set-extra-prompt"
-              rows={3}
-              value={settings.extraPrompt}
-              placeholder={t('extraPromptPlaceholder')}
-              onChange={e => onChange({ extraPrompt: e.target.value })}
-            />
-          </div>
+          <p className="hint-note">{t('tutorMovedNote')}</p>
           <button type="button" className="reset-btn" onClick={onReset}>
             {t('newDialog')}
           </button>

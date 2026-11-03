@@ -50,6 +50,11 @@ const RU: Dict = {
   webgpuNote: 'WebGPU недоступен: LLM не заработает (нужен Chrome/Edge или Safari 26+), Whisper переключён в медленный WASM',
   noSystemVoiceForLang: 'Системных голосов для этого языка не найдено — включи Phonon в настройках',
 
+  // Sidebar: conversation topic
+  talkAbout: 'Поговорим о…',
+  topicPlaceholder: 'Например: «завтрак», «моё хобби — рыбалка», «используй прошедшее время»…',
+  topicHint: 'Тьютор будет придерживаться этой темы и инструкций в разговоре.',
+
   // Settings
   settingsTitle: 'Настройки',
   sectionGeneral: 'Общие',
@@ -74,8 +79,7 @@ const RU: Dict = {
   llmHint: 'При первом выборе скачивается с HF и кешируется браузером — дальше офлайн',
   ramInTab: 'В памяти вкладки: {size}',
   asrModel: 'Распознавание речи',
-  extraPrompt: 'Доп. инструкции тьютору',
-  extraPromptPlaceholder: 'Например: говори простыми фразами, используй только прошедшее время, тема разговора — работа и офис',
+  tutorMovedNote: 'Тема разговора и доп. контекст теперь выбираются в левой панели.',
 
   // Onboarding
   onboardingStart: 'Начать',
@@ -127,6 +131,28 @@ const RU: Dict = {
   statusServerDown: 'Сервер недоступен',
   statusAllReady: 'Все модели готовы',
   statusModelsLoading: 'Модели загружаются…',
+
+  // Diary
+  tabDiary: 'Дневник',
+  diaryMode: 'Режим дневника',
+  diaryModeHint: 'Расскажи, как прошёл день: тютор только слушает и поддерживает, а каждая твоя фраза попадает в дневник.',
+  diaryEmpty: 'Дневник пуст. Включи «Режим дневника» в левой панели и расскажи, как прошёл день.',
+  diaryDelete: 'Удалить',
+  diaryCorrected: 'исправлено',
+
+  // Google Drive sync
+  syncSection: 'Google Drive',
+  googleClientId: 'Google Client ID',
+  googleClientIdHint: 'OAuth Client ID веб-приложения из Google Cloud Console (разрешённые JS-источники = адрес сайта).',
+  syncSignIn: 'Войти через Google',
+  syncSignOut: 'Выйти',
+  syncSignedInAs: 'Синхронизация: {email}',
+  syncSyncing: 'Синхронизация…',
+  syncLastAt: 'Синхронизировано: {time}',
+  syncError: 'Ошибка синхронизации: {error}',
+  syncAuto: 'Автосинхронизация (карточки, чат, дневник)',
+  syncNow: 'Синхронизировать сейчас',
+  syncOffHint: 'Войди через Google — чат, карточки и дневник будут сохраняться на Диск.',
 
   // Engine error strings (lib/*)
   errModelsNotReady: 'Модели ещё не загружены — подожди загрузки в настройках',
@@ -233,6 +259,11 @@ const EN: Dict = {
   webgpuNote: 'WebGPU unavailable: LLM will not work (needs Chrome/Edge or Safari 26+); Whisper falls back to slow WASM',
   noSystemVoiceForLang: 'No system voices for this language — enable Phonon in Settings',
 
+  // Sidebar: conversation topic
+  talkAbout: 'Talk about…',
+  topicPlaceholder: 'E.g. "breakfast", "my hobby is fishing", "use past tense"…',
+  topicHint: 'The tutor will stick to this topic and instructions in the conversation.',
+
   settingsTitle: 'Settings',
   sectionGeneral: 'General',
   sectionSpeech: 'Speech',
@@ -256,8 +287,7 @@ const EN: Dict = {
   llmHint: 'Downloaded from HF on first use and cached by the browser — offline afterwards',
   ramInTab: 'Tab memory: {size}',
   asrModel: 'Speech recognition',
-  extraPrompt: 'Extra tutor instructions',
-  extraPromptPlaceholder: 'E.g. speak in simple phrases, use only past tense, conversation topic — work and office',
+  tutorMovedNote: 'The conversation topic and extra context are now picked in the left sidebar.',
 
   onboardingStart: 'Start',
   onboardingUiLang: 'Interface language',
@@ -304,6 +334,28 @@ const EN: Dict = {
   statusServerDown: 'Server unavailable',
   statusAllReady: 'All models ready',
   statusModelsLoading: 'Models are loading…',
+
+  // Diary
+  tabDiary: 'Diary',
+  diaryMode: 'Diary mode',
+  diaryModeHint: 'Tell the tutor about your day: it only listens and supports, and every line you say goes to the diary.',
+  diaryEmpty: 'The diary is empty. Turn on “Diary mode” in the left panel and tell how your day went.',
+  diaryDelete: 'Delete',
+  diaryCorrected: 'corrected',
+
+  // Google Drive sync
+  syncSection: 'Google Drive',
+  googleClientId: 'Google Client ID',
+  googleClientIdHint: 'Web-app OAuth Client ID from Google Cloud Console (authorized JS origins = your site URL).',
+  syncSignIn: 'Sign in with Google',
+  syncSignOut: 'Sign out',
+  syncSignedInAs: 'Syncing as {email}',
+  syncSyncing: 'Syncing…',
+  syncLastAt: 'Synced: {time}',
+  syncError: 'Sync error: {error}',
+  syncAuto: 'Auto-sync (flashcards, chat, diary)',
+  syncNow: 'Sync now',
+  syncOffHint: 'Sign in with Google — chat, flashcards and diary are backed up to Drive.',
 
   errModelsNotReady: 'Models are not loaded yet — wait for loading in Settings',
   errModelSwitching: 'The new model is still loading — wait a moment and retry',

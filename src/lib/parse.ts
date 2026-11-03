@@ -3,6 +3,7 @@
 // Behavior matches the native version 1:1 so that small browser models
 // fail just as predictably.
 
+import { TUTOR_FALLBACK, type TargetLang } from './langs'
 import type { Correction, Suggestion } from '../types'
 
 /** How a tutor reply was extracted — the benchmark's JSON-reliability metric */
@@ -24,6 +25,7 @@ const FENCE_RE = /```(?:json)?\s*([\s\S]*?)\s*```/g
 
 const WORD_RE = /[\p{L}\p{N}]+/gu
 const CYRILLIC_RE = /[а-яёА-ЯЁ]/
+const LATIN_RE = /[a-zà-ÿ]/i
 
 function cleanRaw(raw: string): string {
   let cleaned = stripThink(raw)
@@ -224,8 +226,9 @@ function thinkJsonRescue(raw: string): Omit<TutorReply, 'method'> | null {
 }
 
 /** Port of parse_tutor_reply. `method` records how the reply was extracted —
- *  the benchmark's JSON-reliability metric for small models. */
-export function parseTutorReply(raw: string): TutorReply {
+ *  the benchmark's JSON-reliability metric for small models. `targetLang`
+ *  picks the apology used when nothing could be parsed at all. */
+export function parseTutorReply(raw: string, targetLang: TargetLang = 'de'): TutorReply {
   const cleaned = cleanRaw(raw)
   for (const candidate of jsonCandidates(cleaned)) {
     const attempts: Array<{ text: string; method: 'json' | 'repaired' }> = [
@@ -249,7 +252,7 @@ export function parseTutorReply(raw: string): TutorReply {
   if (rescued !== null) return { ...rescued, method: 'regex' }
   const fromThink = thinkJsonRescue(raw)
   if (fromThink !== null) return { ...fromThink, method: 'rescued' }
-  const text = cleaned.trim() || 'Entschuldigung, das habe ich nicht verstanden.'
+  const text = cleaned.trim() || TUTOR_FALLBACK[targetLang]
   return {
     reply: text,
     corrections: [],
@@ -313,6 +316,75 @@ export function parseCorrectionsJson(raw: string): CorrectionsReply {
   }
   if (corrections.length > 0) return { corrections, method: 'regex' }
   return { corrections: [], method: 'fail' }
+}
+
+export interface SuggestionsReply {
+  suggestions: Suggestion[]
+  method: 'json' | 'repaired' | 'lines' | 'fail'
+}
+
+/** Parse the dedicated suggestions call: a JSON array of short phrases
+ *  ({"suggestions": [...]} objects also accepted). Tiny models often
+ *  answer with a numbered list instead — accept that too. */
+export function parseSuggestionsJson(raw: string): SuggestionsReply {
+  const cleaned = cleanRaw(raw)
+  // The contract is a bare JSON array — jsonCandidates only looks for
+  // objects, so collect [...] candidates first, then {...} as a bonus
+  const candidates: string[] = []
+  const arrStart = cleaned.indexOf('[')
+  if (arrStart >= 0) {
+    const arrEnd = cleaned.lastIndexOf(']')
+    if (arrEnd > arrStart) candidates.push(cleaned.slice(arrStart, arrEnd + 1))
+    const balanced = balanceJson(cleaned.slice(arrStart))
+    if (balanced !== null && !candidates.includes(balanced)) candidates.push(balanced)
+  }
+  for (const c of jsonCandidates(cleaned)) {
+    if (!candidates.includes(c)) candidates.push(c)
+  }
+  for (const candidate of candidates) {
+    const attempts: Array<{ text: string; method: 'json' | 'repaired' }> = [
+      { text: candidate, method: 'json' },
+      { text: repairJson(candidate), method: 'repaired' },
+    ]
+    for (const attempt of attempts) {
+      let data: unknown
+      try {
+        data = JSON.parse(attempt.text)
+      } catch {
+        continue
+      }
+      let list: unknown = null
+      if (Array.isArray(data)) list = data
+      else if (typeof data === 'object' && data !== null) {
+        const maybe = (data as Record<string, unknown>).suggestions
+        if (Array.isArray(maybe)) list = maybe
+      }
+      if (!Array.isArray(list)) continue
+      const out: Suggestion[] = []
+      for (const item of list.slice(0, 3)) {
+        if (typeof item === 'string' && item.trim()) {
+          out.push({ text: item.trim(), translation: '' })
+        } else if (typeof item === 'object' && item !== null) {
+          const { text, translation } = item as Record<string, unknown>
+          if (typeof text === 'string' && text.trim()) {
+            out.push({ text: text.trim(), translation: typeof translation === 'string' ? translation.trim() : '' })
+          }
+        }
+      }
+      if (out.length > 0) return { suggestions: out, method: attempt.method }
+    }
+  }
+  // numbered/bulleted list fallback: "1. Ich mag Krimis" per line.
+  // Intro lines end with ':' — drop them; a lone surviving line is
+  // usually chatter, not a suggestion list
+  const phrases = cleaned
+    .split('\n')
+    .map(l => l.trim().replace(/^\d+[.)]\s*/, '').replace(/^[-\u2022*]\s*/, '').trim())
+    .filter(p => p.length > 1 && p.length <= 90 && !/[:;]$/.test(p))
+  if (phrases.length >= 2) {
+    return { suggestions: phrases.slice(0, 3).map(p => ({ text: p, translation: '' })), method: 'lines' }
+  }
+  return { suggestions: [], method: 'fail' }
 }
 
 export interface TranslationPair {
@@ -395,11 +467,36 @@ function normalize(text: string): string {
   return (text.toLowerCase().match(WORD_RE) ?? []).join(' ')
 }
 
+/** Content stems for overlap checks (tutor relevance gates): 4-char prefixes
+ *  make inflection families match (kommst/komme, heiße/heißt, kein/keine). */
+export function contentStems(text: string): Set<string> {
+  const STOP = new Set([
+    'auch', 'aber', 'und', 'oder', 'nicht', 'kein', 'keine', 'sehr', 'gut', 'ja', 'nein',
+    'danke', 'bitte', 'schön', 'toll', 'super', 'wunderbar', 'gern', 'gerne', 'noch', 'nur',
+    'mein', 'meine', 'dein', 'deine', 'habe', 'hast', 'hat', 'war', 'ist', 'bin', 'bist', 'sind',
+    'this', 'that', 'very', 'really', 'nice', 'great', 'good', 'thanks', 'yes', 'okay', 'fine',
+  ])
+  const out = new Set<string>()
+  for (const t of text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []) {
+    if (STOP.has(t)) continue
+    out.add(t.length >= 5 ? t.slice(0, 4) : t)
+  }
+  return out
+}
+
 /** Port of filter_corrections: drop empty, degenerate, not-from-the-message
  *  and rewriting corrections; hide explanations not in the UI language. */
-export function filterCorrections(corrections: Correction[], userText: string): Correction[] {
+export function filterCorrections(
+  corrections: Correction[],
+  userText: string,
+  uiLang: 'ru' | 'en' = 'ru',
+): Correction[] {
   const userNorm = normalize(userText)
   const userTokens = new Set(userNorm.split(' ').filter(Boolean))
+  // Telegraphic fragments ("Mit Milch.", "Ja.") are normal spoken answers at
+  // A1 — the checker invents "fixes" for them; below three words we do not
+  // correct at all.
+  if (userTokens.size < 3) return []
   const kept: Correction[] = []
   for (const c of corrections) {
     const origNorm = normalize(c.original)
@@ -412,8 +509,51 @@ export function filterCorrections(corrections: Correction[], userText: string): 
     const corrTokenSet = new Set(corrNorm.split(' ').filter(Boolean))
     const preserved = tokens.length ? tokens.filter(t => corrTokenSet.has(t)).length / tokens.length : 0
     if (preserved < 0.5) continue
+
+    // ---- 1B-model hallucination guards (bench 2026-11-03 e2e): the tiny
+    //  checker invents fixes for correct sentences ----
+    const origWords = origNorm.split(' ').filter(Boolean)
+    const corrWords = corrNorm.split(' ').filter(Boolean)
+    // 1. Fragment completion: "Und du?" -> a full question — not a fix
+    if (corrWords.length > Math.max(4, origWords.length + 3)) continue
+    // 2. Pure reordering of a pronoun-first sentence is stylistic inversion,
+    //    not a fix: "Ich heiße Sascha." -> "Sascha heiße ich." A real V2 fix
+    //    ("Am Wochenende ich habe..." -> "Am Wochenende habe ich...") starts
+    //    with a non-pronoun and survives.
+    const sameWords =
+      origWords.length === corrWords.length && origWords.every(w => corrWords.includes(w))
+    const SUBJECT_PRONOUNS = new Set([
+      'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr',
+      'i', 'you', 'we', 'they',
+      'je', 'tu', 'il', 'elle', 'nous', 'vous', 'on',
+      'yo', 'él', 'ella', 'nosotros', 'vosotros', 'ustedes',
+      'eu', 'você', 'ele', 'ela', 'nós',
+    ])
+    if (sameWords && SUBJECT_PRONOUNS.has(origWords[0]) && origWords[0] !== corrWords[0]) continue
+    // 3. Single content-word substitution with a different 4-char stem is a
+    //    word-CHOICE change, not grammar: "Was machst du..." -> "Was hast du..."
+    //    Inflection fixes share the stem (kein/keine, mein/meinem) and survive.
+    if (origWords.length === corrWords.length && origWords.length >= 2) {
+      const diffIdx = origWords.map((w, i) => (w !== corrWords[i] ? i : -1)).filter(i => i >= 0)
+      if (diffIdx.length === 1) {
+        const a = origWords[diffIdx[0]]
+        const b = corrWords[diffIdx[0]]
+        if (a.length >= 4 && b.length >= 4 && a.slice(0, 4) !== b.slice(0, 4)) continue
+      }
+    }
+    // 4. The "fix" must not itself violate verb-second: "Gestern ich spielte
+    //    Fußball" offered as the CORRECTED form teaches broken German —
+    //    a fronted time phrase directly followed by "ich" is still wrong.
+    if (/\b(gestern|morgen|heute|danach|jetzt|nächst\w*|letzt\w*)\s+ich\b/i.test(corrNorm)) continue
+    if (/\bam\s+\S+\s+ich\b/i.test(corrNorm)) continue
+
     let explanation = c.explanation
-    if (explanation && !CYRILLIC_RE.test(explanation)) explanation = ''
+    if (explanation) {
+      // ru — Cyrillic; en — Latin without Cyrillic (same test as translationOk)
+      const inUiLang =
+        uiLang === 'ru' ? CYRILLIC_RE.test(explanation) : LATIN_RE.test(explanation) && !CYRILLIC_RE.test(explanation)
+      if (!inUiLang) explanation = ''
+    }
     kept.push({ original: c.original, corrected: c.corrected, explanation })
   }
   return kept

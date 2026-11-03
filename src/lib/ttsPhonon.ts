@@ -1,14 +1,26 @@
 // Phonon TTS in the browser: the official phonon-tts WASM package (streaming 24 kHz,
 // WebGPU/CPU). The model is chosen by target language:
-//   • de — phonon-40m-de + 13 local voices (as in the native version);
-//   • en — public phonon-31m-en (hf://, Apache 2.0) + the gradium/phonon-voices catalog;
-//   • fr/es/pt — phonon-40m-XX (gated on HF) — files hosted next to the app
-//     or on GitHub Release; voice = default-voice from the same folder.
+//   • de — phonon-40m-de self-hosted (dev files in public/models, GitHub Release
+//     in prod) + 13 local voices; an unreachable base falls back to multilingual;
+//   • en — public phonon-31m-en (Apache 2.0) + the gradium/phonon-voices catalog;
+//   • fr/es/pt — the public mirror of phonon-40m-multilingual (en/fr/de/es/pt)
+//     + per-language catalog voices (the per-language gradium models are gated).
 // Files are cached in the Cache API after the first download; offline afterwards.
 
 import { PhononTTS, type ModelSpec, type PhononTTS as PhononInstance } from 'phonon-tts'
 import { libT } from '../i18n'
-import { phononVoices, type PhononVoiceInfo, type TargetLang } from './langs'
+import {
+  isHfUrl,
+  multilingualFile,
+  phonon31mEnFile,
+  phononVoices,
+  probePhononBase,
+  resolvePhononVoice,
+  MULTILINGUAL_BASE,
+  PHONON_31M_EN_BASE,
+  type PhononVoiceInfo,
+  type TargetLang,
+} from './langs'
 
 export type { PhononVoiceInfo }
 
@@ -16,18 +28,50 @@ function withSlash(base: string): string {
   return base.endsWith('/') ? base : `${base}/`
 }
 
-function buildModel(lang: TargetLang, base: string): ModelSpec | string {
-  // hf://<owner>/<repo> — phonon-tts maps the repository files itself
-  if (base.startsWith('hf://')) return base
-  const b = withSlash(base)
+/** Voices of a (language, base) pair as a ModelSpec voice map */
+function voiceMap(lang: TargetLang, base: string): Record<string, string> {
   const voices: Record<string, string> = {}
   for (const v of phononVoices(lang, base)) voices[v.name] = v.url
+  return voices
+}
+
+/** Where the checkpoint files are. Always a ModelSpec when the voices come
+ *  from elsewhere than the model folder (catalog/HF files) — a plain string
+ *  would leave the requested voices unknown to the model. Only a generic
+ *  hf:// repo is passed through for phonon-tts to resolve itself. */
+function buildModel(lang: TargetLang, base: string): ModelSpec | string {
+  // Multilingual model (fr/es/pt default + fallback): weights from the public
+  // mirror, voices from the per-language public catalog.
+  if (base.startsWith(MULTILINGUAL_BASE)) {
+    return {
+      weights: { q8: multilingualFile('model.q8.gguf') },
+      tokenizer: multilingualFile('tokenizer.json'),
+      config: multilingualFile('config.json'),
+      voices: voiceMap(lang, base),
+      defaultVoice: resolvePhononVoice(lang, base),
+    }
+  }
+  // Public English model: own default voice + the catalog.
+  if (lang === 'en' && base.startsWith(PHONON_31M_EN_BASE)) {
+    return {
+      weights: { q8: phonon31mEnFile('model.q8.gguf') },
+      tokenizer: phonon31mEnFile('tokenizer.json'),
+      config: phonon31mEnFile('config.json'),
+      voices: voiceMap(lang, base),
+      defaultVoice: resolvePhononVoice(lang, base),
+    }
+  }
+  // Any other public hf:// repo: let phonon-tts pick the repo's own files/voices.
+  if (isHfUrl(base)) return base
+  // Self-hosted base (local dev folder, GitHub Release, custom mirror):
+  // model files and voice files next to each other.
+  const b = withSlash(base)
   return {
     weights: { q8: `${b}model.q8.gguf` },
     tokenizer: `${b}tokenizer.json`,
     config: `${b}config.json`,
-    voices,
-    defaultVoice: phononVoices(lang, base)[0]?.name,
+    voices: voiceMap(lang, base),
+    defaultVoice: resolvePhononVoice(lang, base),
   }
 }
 
@@ -57,10 +101,13 @@ export class PhononEngine {
     return this.tts ? `Phonon · ${this.deviceLabel}` : 'Phonon'
   }
 
-  /** Load the language's model (or return the loaded one); q8, WebGPU when available */
+  /** Load the language's model (or return the loaded one); q8, WebGPU when available.
+   *  Only the selected voice is prefetched (~250 KB); the rest of the catalog
+   *  loads on first use and is cached. */
   ensure(
     lang: TargetLang,
     base: string,
+    voice: string,
     onProgress: (p: PhononLoadProgress) => void,
   ): Promise<PhononInstance> {
     const key = `${lang}|${base}`
@@ -71,27 +118,61 @@ export class PhononEngine {
       this.dispose()
     }
     this.loadedKey = key
-    this.loadPromise = PhononTTS.load({
-      lang,
-      quant: 'q8',
-      device: 'auto',
-      model: buildModel(lang, base),
-      // voices are ~250 KB each — prefetch all so voice switching works offline
-      voices: phononVoices(lang, base).map(v => v.name),
-      onProgress,
-    }).then(tts => {
-      // another language may have been requested meanwhile — unload this one then
-      if (this.loadedKey === key) this.tts = tts
-      else tts.dispose()
-      return tts
-    }).finally(() => {
-      if (this.loadedKey === key) this.loadPromise = null
-    })
+    this.loadPromise = this.loadWithFallback(lang, base, voice, onProgress)
+      .then(tts => {
+        // another language may have been requested meanwhile — unload this one then
+        if (this.loadedKey === key) this.tts = tts
+        else tts.dispose()
+        return tts
+      })
+      .finally(() => {
+        if (this.loadedKey === key) this.loadPromise = null
+      })
     return this.loadPromise
   }
 
-  get loadedBaseUrl(): string | null {
-    return this.loadedKey ? this.loadedKey.split('|')[1] : null
+  /** Load the requested base; if it cannot be reached (gated HF repo, missing
+   *  self-hosted files, dead mirror), fall back once to the public
+   *  multilingual model with the language's catalog voices — every target
+   *  language keeps a working voice instead of a hard error. */
+  private async loadWithFallback(
+    lang: TargetLang,
+    base: string,
+    voice: string,
+    onProgress: (p: PhononLoadProgress) => void,
+  ): Promise<PhononInstance> {
+    let effective = base
+    // self-hosted base without a config.json: do not even try the weights
+    if (!isHfUrl(base) && !(await probePhononBase(base))) effective = MULTILINGUAL_BASE
+    try {
+      return await this.doLoad(lang, effective, resolvePhononVoice(lang, effective, voice), onProgress)
+    } catch (err) {
+      if (effective === MULTILINGUAL_BASE) throw err
+      return await this.doLoad(
+        lang,
+        MULTILINGUAL_BASE,
+        resolvePhononVoice(lang, MULTILINGUAL_BASE, voice),
+        onProgress,
+      )
+    }
+  }
+
+  private doLoad(
+    lang: TargetLang,
+    base: string,
+    voice: string,
+    onProgress: (p: PhononLoadProgress) => void,
+  ): Promise<PhononInstance> {
+    const model = buildModel(lang, base)
+    return PhononTTS.load({
+      lang,
+      quant: 'q8',
+      device: 'auto',
+      model,
+      // A generic hf:// repo manages its own voice names — nothing to prefetch
+      voices: typeof model === 'string' ? undefined : [voice],
+      onProgress,
+    })
   }
 
   dispose(): void {
@@ -118,10 +199,14 @@ export class PhononEngine {
     const tts = this.tts
     if (tts === null) throw new TtsError(libT('errTtsNotLoaded'))
     this.cancel()
+    // A stale saved voice name (base switched, voice not hosted) must not
+    // kill the line — speak the model's default instead.
+    const known = tts.voices
+    const effectiveVoice = !voice || known.includes(voice) ? voice : known[0]
     const started = performance.now()
     const ctx = new AudioContext({ sampleRate: tts.sampleRate })
     this.ctx = ctx
-    const stream = tts.stream(text, { voice })
+    const stream = tts.stream(text, { voice: effectiveVoice })
     this.stream = stream
     let firstAudioMs = 0
     let lastSource: AudioBufferSourceNode | null = null

@@ -1,0 +1,41 @@
+{
+  "model": "gemma-3-1b",
+  "turns": 7,
+  "errors": 0,
+  "oneQuestionPct": 100,
+  "avgQuestionsPerReply": 0.86,
+  "englishDrift": 0,
+  "over34Words": 0,
+  "emptyReplies": 0,
+  "repeatedQuestions": 0,
+  "correctionsTurns": 2,
+  "correctionsTotal": 2,
+  "correctionsRecall": 50,
+  "correctionsFalsePositives": 0,
+  "chipTurns": 6,
+  "parseFallbackReplies": 1,
+  "avgLlmMs": 401,
+  "avgTranslationMs": 806,
+  "perPersona": [
+    {
+      "persona": "d1-diary-a1",
+      "turns": 7,
+      "errors": 0,
+      "oneQuestion": 7,
+      "questions": 6,
+      "englishDrift": 0,
+      "over34w": 0,
+      "emptyReply": 0,
+      "corrTurns": 2,
+      "corrections": 2,
+      "chipTurns": 6,
+      "fallbackUsed": 1,
+      "llmMs": 2808,
+      "trMs": 5641,
+      "repeatedQuestions": 0,
+      "errorTurnsTotal": 2,
+      "errorTurnsCaught": 1,
+      "falsePositives": 0
+    }
+  ]
+}

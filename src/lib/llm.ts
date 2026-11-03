@@ -17,35 +17,39 @@ export interface LlmModelOption {
   tiny?: boolean
 }
 
-/** Sidebar candidates; filtered against the installed web-llm prebuilt list */
+/** Curated model list; filtered against the installed web-llm prebuilt
+ *  list. Note the Gemma-3 ID: "gemma3-1b-it…" (no hyphen in "gemma3"). */
 const MODEL_CANDIDATES: LlmModelOption[] = [
-  { key: 'qwen3-1.7b', modelId: 'Qwen3-1.7B-q4f16_1-MLC', label: 'Qwen3-1.7B', size: '' },
-  { key: 'gemma-4-e2b', modelId: 'gemma-4-E2B-it-q4f16_1-MLC', label: 'Gemma-4 E2B (как нативная)', size: '' },
-  { key: 'qwen3-4b', modelId: 'Qwen3-4B-q4f16_1-MLC', label: 'Qwen3-4B', size: '' },
-  { key: 'qwen3-0.6b', modelId: 'Qwen3-0.6B-q4f16_1-MLC', label: 'Qwen3-0.6B', size: '', tiny: true },
-  { key: 'gemma3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B', size: '', tiny: true },
-  { key: 'llama-3.2-1b', modelId: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-1B', size: '', tiny: true },
-  { key: 'qwen2.5-3b', modelId: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-3B', size: '' },
-  { key: 'qwen2.5-1.5b', modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-1.5B', size: '' },
-  { key: 'llama-3.2-3b', modelId: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-3B', size: '' },
-  { key: 'gemma-2-2b', modelId: 'gemma-2-2b-it-q4f16_1-MLC', label: 'Gemma-2-2B', size: '' },
+  { key: 'gemma-3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B-IT 🌐 (Лучшая мультиязычная сбалансированная)', size: '', tiny: true },
+  { key: 'llama-3.2-1b', modelId: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-1B-Instruct', size: '', tiny: true },
+  { key: 'qwen2.5-1.5b', modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-1.5B-Instruct', size: '' },
+  { key: 'gemma-4-e2b', modelId: 'gemma-4-E2B-it-q4f16_1-MLC', label: 'Gemma-4 E2B', size: '' },
 ]
 
-export const DEFAULT_LLM_KEY = 'qwen3-1.7b'
+export const DEFAULT_LLM_KEY = 'gemma-3-1b'
 
 /** Models actually present in this web-llm version's prebuilt config.
  *  size comes from the config's vram_required_MB — the honest tab-memory cost. */
 export function availableLlmModels(): LlmModelOption[] {
   const byId = new Map(webllm.prebuiltAppConfig.model_list.map(m => [m.model_id, m]))
-  const found = MODEL_CANDIDATES.filter(m => byId.has(m.modelId)).map(m => {
+  const found: Array<{ option: LlmModelOption; vramMb: number }> = MODEL_CANDIDATES.filter(m =>
+    byId.has(m.modelId),
+  ).map(m => {
     const vramMb = byId.get(m.modelId)?.vram_required_MB
-    const size =
-      typeof vramMb === 'number' && Number.isFinite(vramMb)
-        ? `RAM ~${(vramMb / 1024).toFixed(1)} ГБ`
-        : m.size
-    return { ...m, size }
+    const known = typeof vramMb === 'number' && Number.isFinite(vramMb)
+    return {
+      option: {
+        ...m,
+        size: known ? `RAM ~${((vramMb as number) / 1024).toFixed(1)} ГБ` : m.size,
+      },
+      // unknown memory cost sorts last instead of breaking the order
+      vramMb: known ? (vramMb as number) : Number.POSITIVE_INFINITY,
+    }
   })
-  return found.length > 0 ? found : MODEL_CANDIDATES.slice(0, 1)
+  // smallest → largest (tab memory, then label as the tie-breaker)
+  found.sort((a, b) => a.vramMb - b.vramMb || a.option.label.localeCompare(b.option.label))
+  const options = found.map(f => f.option)
+  return options.length > 0 ? options : MODEL_CANDIDATES.slice(0, 1)
 }
 
 export function llmModelByKey(key: string): LlmModelOption {
@@ -158,7 +162,7 @@ export class LlmEngine {
    */
   async chat(
     messages: LlmMessage[],
-    opts: { temperature?: number; maxTokens?: number } = {},
+    opts: { temperature?: number; maxTokens?: number; stop?: string[] } = {},
   ): Promise<ChatResult> {
     if (this.engine === null || this.currentKey === null) {
       throw new LlmError('LLM ещё не загружена')
@@ -178,6 +182,7 @@ export class LlmEngine {
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 900,
     }
+    if (opts.stop && opts.stop.length > 0) body.stop = opts.stop
     if (isQwen3) body.enable_thinking = false
     // stream: false selects the non-streaming overload → Promise<ChatCompletion>
     const response = await this.engine.chat.completions.create(

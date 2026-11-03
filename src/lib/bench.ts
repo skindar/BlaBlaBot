@@ -28,8 +28,12 @@ const pkgVersions = {
   transformers: (pkg.dependencies?.['@huggingface/transformers'] ?? '?').replace(/^[^0-9]*/, ''),
 }
 
-export type TurnStage = 'tutor' | 'corrections' | 'translation' | 'vocab' | 'turn' | 'roundtrip'
-export type ParseOutcome = 'json' | 'repaired' | 'rescued' | 'regex' | 'plain' | 'fallback' | 'fail'
+export type TurnStage = 'tutor' | 'corrections' | 'suggestions' | 'translation' | 'vocab' | 'turn' | 'roundtrip'
+export type ParseOutcome =
+  | 'json' | 'repaired' | 'rescued' | 'regex' | 'plain'
+  | 'fallback' | 'lines' | 'fail'
+  // scaffolded tutor (docs/tutor-methodology.md): how the reply was produced
+  | 'micro' | 'template' | 'scaffold' | 'farewell'
 export type PromptSchema = 'full' | 'tiny'
 
 /** One LLM call (or one full turn) as recorded for the benchmark */
@@ -424,7 +428,7 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
       const t0 = performance.now()
       const tutor = await llmEngine.chat(messages, { temperature: 0 })
       const wallTutor = Math.round(performance.now() - t0)
-      const parsed = parseTutorReply(tutor.text)
+      const parsed = parseTutorReply(tutor.text, targetLang)
       let corrections = parsed.corrections
       if (option.tiny) {
         // tiny tier: corrections via the separate single-key call
@@ -454,7 +458,7 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
           schema: 'tiny',
         })
       }
-      const kept = filterCorrections(corrections, step.text)
+      const kept = filterCorrections(corrections, step.text, uiLang)
       recordTurn({
         stage: 'tutor',
         llmKey: key,
@@ -623,13 +627,13 @@ export async function runContextProbe(opts: {
         decodeTokS: row.decodeTokS,
         e2eMs: call.perf?.e2eMs ?? null,
         wallMs: row.wallMs,
-        parse: parseTutorReply(call.text).method,
+        parse: parseTutorReply(call.text, targetLang).method,
         correctionsRaw: null,
         correctionsKept: null,
         turnNo: turn,
         schema: option.tiny ? 'tiny' : 'full',
       })
-      const assistantText = parseTutorReply(call.text).reply
+      const assistantText = parseTutorReply(call.text, targetLang).reply
       history.push({ role: 'user', content: line }, { role: 'assistant', content: assistantText || line })
     } catch (err) {
       probe.rows.push({

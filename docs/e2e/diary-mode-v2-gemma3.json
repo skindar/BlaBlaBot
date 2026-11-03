@@ -1,0 +1,334 @@
+{
+  "model": "gemma-3-1b",
+  "diary": true,
+  "personas": [
+    {
+      "persona": "d1-diary-a1",
+      "level": "A1",
+      "errorTurns": [
+        2,
+        4
+      ],
+      "turns": [
+        {
+          "user": "Hallo! Ich will über mein Tag erzählen.",
+          "reply": "Erzähl mir: Wie war dein Tag?",
+          "user_translation": "Я расскажу о своем дне.",
+          "translation": "Расскажи мне: как прошёл твой день?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2447,
+            "llm_ms": 1,
+            "translation_ms": 628,
+            "tts_ms": 794,
+            "total_ms": 3873
+          }
+        },
+        {
+          "user": "Heute Morgen ich habe viel gearbeitet.",
+          "reply": "Verstehe. Und was war dann?",
+          "user_translation": "Сегодня утром я много работал.",
+          "translation": "И что было дальше?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1842,
+            "llm_ms": 674,
+            "translation_ms": 732,
+            "tts_ms": 0,
+            "total_ms": 3250
+          }
+        },
+        {
+          "user": "Danach bin ich einkaufen gegangen.",
+          "reply": "Das ist gut. Verstehe. Und was kam danach?",
+          "user_translation": "Последно я пошел в магазин.",
+          "translation": "Понятно. А что было после?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2157,
+            "llm_ms": 238,
+            "translation_ms": 769,
+            "tts_ms": 0,
+            "total_ms": 3165
+          }
+        },
+        {
+          "user": "Abends habe ich einen Film gesehen mit mein Freund.",
+          "reply": "Oh, interessant! Wie hast du dich gefühlt?",
+          "user_translation": "",
+          "translation": "интересно Что ты почувствовал(а)?",
+          "corrections": [
+            {
+              "original": "Abends habe ich einen Film gesehen mit mein Freund.",
+              "corrected": "Abends schaue ich einen Film mit meinem Freund.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2491,
+            "llm_ms": 727,
+            "translation_ms": 958,
+            "tts_ms": 0,
+            "total_ms": 4178
+          }
+        },
+        {
+          "user": "Der Film war sehr lustig.",
+          "reply": "Danke fürs Erzählen! Das klingt spannend! Was hast du dann gemacht?",
+          "user_translation": "",
+          "translation": "Спасибо за рассказ! Звучит интересно! Что ты сделал(а) потом?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1248,
+            "llm_ms": 536,
+            "translation_ms": 777,
+            "tts_ms": 0,
+            "total_ms": 2565
+          }
+        },
+        {
+          "user": "Und du? Was hast du heute gemacht?",
+          "reply": "Verstehe. Wirklich? Erzähl mehr!",
+          "user_translation": "У тебя что-то делала сегодня?",
+          "translation": "Правда? Расскажи ещё!",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Und dann habe ich …",
+              "translation": ""
+            },
+            {
+              "text": "Später …",
+              "translation": ""
+            },
+            {
+              "text": "Das war mein Tag.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1195,
+            "llm_ms": 632,
+            "translation_ms": 1095,
+            "tts_ms": 0,
+            "total_ms": 2925
+          }
+        },
+        {
+          "user": "Das war mein Tag. Tschüss!",
+          "reply": "Tschüss! Es war schön, mit dir zu sprechen. Bis bald!",
+          "user_translation": "Это был мой день. До свидания!",
+          "translation": "Пока! Было приятно с тобой поговорить. До скорого!",
+          "corrections": [],
+          "suggestions": [],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1854,
+            "llm_ms": 0,
+            "translation_ms": 682,
+            "tts_ms": 0,
+            "total_ms": 2538
+          }
+        }
+      ]
+    }
+  ],
+  "diaryEntries": [
+    {
+      "uid": "b8bc0522-adef-4b96-b018-126e024596b9",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Das war mein Tag. Tschüss!",
+      "translation": "Это был мой день. До свидания!",
+      "created_at": "2026-11-03T06:20:46.714Z"
+    },
+    {
+      "uid": "370ea186-71dc-4ac7-9af3-7914d681b7e0",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Und du? Was hast du heute gemacht?",
+      "translation": "У тебя что-то делала сегодня?",
+      "created_at": "2026-11-03T06:20:44.175Z"
+    },
+    {
+      "uid": "f4afa119-7ab4-4a08-8504-63e971d52dfb",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Der Film war sehr lustig.",
+      "translation": "",
+      "created_at": "2026-11-03T06:20:41.250Z"
+    },
+    {
+      "uid": "edb5d35b-7660-4098-aa87-ffc0acce50f5",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Abends habe ich einen Film gesehen mit mein Freund.",
+      "corrected": "Abends schaue ich einen Film mit meinem Freund.",
+      "translation": "",
+      "created_at": "2026-11-03T06:20:38.685Z"
+    },
+    {
+      "uid": "2ae8ec3d-82a3-417e-8565-1f7c214969fe",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Danach bin ich einkaufen gegangen.",
+      "translation": "Последно я пошел в магазин.",
+      "created_at": "2026-11-03T06:20:34.507Z"
+    },
+    {
+      "uid": "5b3a0f2e-76a6-4b30-b5d0-cfdf8b9a98f1",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Heute Morgen ich habe viel gearbeitet.",
+      "translation": "Сегодня утром я много работал.",
+      "created_at": "2026-11-03T06:20:31.341Z"
+    },
+    {
+      "uid": "5bc9d496-2903-4a0b-b258-8099e2b87fa2",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Hallo! Ich will über mein Tag erzählen.",
+      "translation": "Я расскажу о своем дне.",
+      "created_at": "2026-11-03T06:20:27.297Z"
+    },
+    {
+      "uid": "d819240c-b09c-4534-8527-cbc834940f83",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Das war mein Tag. Tschüss!",
+      "translation": "Это был мой день. До свидания!",
+      "created_at": "2026-11-03T06:19:28.011Z"
+    },
+    {
+      "uid": "a877ff97-053e-4b44-91d8-ecb759d15e1c",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Und du? Was hast du heute gemacht?",
+      "translation": "У тебя что-то делала сегодня?",
+      "created_at": "2026-11-03T06:19:27.342Z"
+    },
+    {
+      "uid": "129d3d1d-f8a3-4707-8927-2097c16db417",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Der Film war sehr lustig.",
+      "translation": "",
+      "created_at": "2026-11-03T06:19:25.642Z"
+    },
+    {
+      "uid": "aee1bc39-b74e-41fe-840d-44abbdc5147e",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Abends habe ich einen Film gesehen mit mein Freund.",
+      "translation": "",
+      "created_at": "2026-11-03T06:19:24.127Z"
+    },
+    {
+      "uid": "09446f76-bc7b-4420-b47e-0b9fa70e0b05",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Danach bin ich einkaufen gegangen.",
+      "translation": "Последно я пошёл в магазин.",
+      "created_at": "2026-11-03T06:19:22.269Z"
+    },
+    {
+      "uid": "960ab4f0-6f95-4edf-ba4b-be0bcbb9d7bb",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Heute Morgen ich habe viel gearbeitet.",
+      "translation": "Сегодня утром я много работал.",
+      "created_at": "2026-11-03T06:19:21.485Z"
+    },
+    {
+      "uid": "bc2118ca-2b14-42dd-be6f-8b6dedcf6b2e",
+      "lang": "de",
+      "date": "2026-11-03",
+      "text": "Hallo! Ich will über mein Tag erzählen.",
+      "translation": "Я расскажу о своем дне.",
+      "created_at": "2026-11-03T06:19:19.296Z"
+    }
+  ]
+}

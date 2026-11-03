@@ -55,7 +55,7 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
         const t = performance.now()
         let sawNetwork = false
         try {
-          await phononEngine.ensure(targetLang, base, p => {
+          await phononEngine.ensure(targetLang, base, ttsVoice, p => {
             if (cancelled) return
             if (!p.cached) sawNetwork = true
             const frac = p.total ? p.loaded / p.total : 0

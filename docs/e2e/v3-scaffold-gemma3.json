@@ -1,0 +1,748 @@
+{
+  "model": "gemma-3-1b",
+  "personas": [
+    {
+      "persona": "p1-quiet-a1",
+      "level": "A1",
+      "errorTurns": [],
+      "turns": [
+        {
+          "user": "Guten Tag.",
+          "reply": "Hallo, herzlich willkommen! Wie heißt du?",
+          "user_translation": "",
+          "translation": "Здравствуйте, добро пожаловать! Как тебя зовут?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich heiße Sascha.",
+              "translation": ""
+            },
+            {
+              "text": "Mein Name ist Maria.",
+              "translation": ""
+            },
+            {
+              "text": "Ich heiße Alex.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1483,
+            "llm_ms": 509,
+            "translation_ms": 982,
+            "tts_ms": 799,
+            "total_ms": 3777
+          }
+        },
+        {
+          "user": "Ich heiße Sascha.",
+          "reply": "Sascha ist ein tolles Nachkommen! Woher kommst du?",
+          "user_translation": "Я называюсь Саша.",
+          "translation": "Откуда ты?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich komme aus Russland.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Spanien.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Deutschland.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1465,
+            "llm_ms": 620,
+            "translation_ms": 993,
+            "tts_ms": 0,
+            "total_ms": 3080
+          }
+        },
+        {
+          "user": "Ich komme aus Russland.",
+          "reply": "Ich komme aus Russland, das ist interessant! Wo wohnst du jetzt?",
+          "user_translation": "Я прихожу из России.",
+          "translation": "Где ты сейчас живёшь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich wohne in Moskau.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne in einem kleinen Dorf.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne bei meiner Familie.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1988,
+            "llm_ms": 619,
+            "translation_ms": 967,
+            "tts_ms": 0,
+            "total_ms": 3575
+          }
+        },
+        {
+          "user": "Ich wohne in Moskau.",
+          "reply": "Ich wohne in Russland, das ist ein tolles Land! Arbeit oder Studium?",
+          "user_translation": "Я живу в Москве.",
+          "translation": "Я живу в России, это отличное место! Чем ты занимаешься? Работа или учёба?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich bin Student.",
+              "translation": ""
+            },
+            {
+              "text": "Ich arbeite als Ingenieur.",
+              "translation": ""
+            },
+            {
+              "text": "Ich bin Lehrerin.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1992,
+            "llm_ms": 731,
+            "translation_ms": 1369,
+            "tts_ms": 0,
+            "total_ms": 4094
+          }
+        },
+        {
+          "user": "Ja, ich trinke Kaffee.",
+          "reply": "Ja, Kaffee ist wichtig! Und was machst du beruflich?",
+          "user_translation": "Я пью кофе.",
+          "translation": "Кофе важно! А кем ты работаешь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich bin Student.",
+              "translation": ""
+            },
+            {
+              "text": "Ich arbeite als Ingenieur.",
+              "translation": ""
+            },
+            {
+              "text": "Ich bin Lehrerin.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1601,
+            "llm_ms": 532,
+            "translation_ms": 450,
+            "tts_ms": 0,
+            "total_ms": 2584
+          }
+        },
+        {
+          "user": "Mit Milch.",
+          "reply": "Mit Milch ist gut! Und was machst du gern in deiner Freizeit?",
+          "user_translation": "",
+          "translation": "С молоком хорошо. А что ты любишь делать в свободное время?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich spiele gern Fußball.",
+              "translation": ""
+            },
+            {
+              "text": "Ich lese gern.",
+              "translation": ""
+            },
+            {
+              "text": "Ich koche gern.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1199,
+            "llm_ms": 504,
+            "translation_ms": 998,
+            "tts_ms": 0,
+            "total_ms": 2703
+          }
+        },
+        {
+          "user": "Und du? Was trinkst du morgens?",
+          "reply": "Ich trinke morgens immer Kaffee mit Milch und ein bisschen Zucker. Was ist dein Hobby?",
+          "user_translation": "Вы что-то делаете? Что вы делаете утром?",
+          "translation": "Я пью утром всегда кофе с молоком и немного сахара. Так какое у тебя хобби?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich spiele gern Fußball.",
+              "translation": ""
+            },
+            {
+              "text": "Ich lese gern.",
+              "translation": ""
+            },
+            {
+              "text": "Ich koche gern.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 908,
+            "llm_ms": 0,
+            "translation_ms": 1662,
+            "tts_ms": 0,
+            "total_ms": 2572
+          }
+        },
+        {
+          "user": "Ich esse Brot mit Käse.",
+          "reply": "Ich esse Brot mit Käse gerne in der Stadt. Und was machst du gern in deiner Freizeit?",
+          "user_translation": "Я ем хлеб с сыром.",
+          "translation": "Я люблю есть хлеб с сыром в городе. А что ты любишь делать в свободное время?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich spiele gern Fußball.",
+              "translation": ""
+            },
+            {
+              "text": "Ich lese gern.",
+              "translation": ""
+            },
+            {
+              "text": "Ich koche gern.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2503,
+            "llm_ms": 680,
+            "translation_ms": 1412,
+            "tts_ms": 0,
+            "total_ms": 4597
+          }
+        }
+      ]
+    },
+    {
+      "persona": "p2-chatty-a1",
+      "level": "A1",
+      "errorTurns": [
+        2,
+        3,
+        4,
+        7
+      ],
+      "turns": [
+        {
+          "user": "Hallo! Mir geht es gut, danke.",
+          "reply": "Hallo, schön, danke! Wie heißt du?",
+          "user_translation": "Здравствуйте! У вас всё хорошо, спасибо.",
+          "translation": "Здравствуйте, спасибо! Как тебя зовут?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich heiße Sascha.",
+              "translation": ""
+            },
+            {
+              "text": "Mein Name ist Maria.",
+              "translation": ""
+            },
+            {
+              "text": "Ich heiße Alex.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1339,
+            "llm_ms": 567,
+            "translation_ms": 879,
+            "tts_ms": 0,
+            "total_ms": 2787
+          }
+        },
+        {
+          "user": "Ich habe Hobby Fußball.",
+          "reply": "Ich heiße Max. Woher kommst du?",
+          "user_translation": "У меня есть хобби – футбол.",
+          "translation": "Я называюсь Макс. Откуда ты?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich komme aus Russland.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Spanien.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Deutschland.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1791,
+            "llm_ms": 503,
+            "translation_ms": 583,
+            "tts_ms": 0,
+            "total_ms": 2880
+          }
+        },
+        {
+          "user": "Ich spiele Fußball mit Freunde.",
+          "reply": "Ich komme aus Deutschland. Woher kommst du noch mal?",
+          "user_translation": "",
+          "translation": "Откуда ты, ещё раз?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich komme aus Russland.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Spanien.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Deutschland.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2054,
+            "llm_ms": 479,
+            "translation_ms": 1113,
+            "tts_ms": 0,
+            "total_ms": 3647
+          }
+        },
+        {
+          "user": "Gestern ich spiele Fußball zwei Stunden.",
+          "reply": "Ich komme aus dem Land. Woher kommst du?",
+          "user_translation": "Вчера я играл в футбол два часа.",
+          "translation": "Я прихожу из страны. Откуда ты?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich komme aus Russland.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Spanien.",
+              "translation": ""
+            },
+            {
+              "text": "Ich komme aus Deutschland.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2068,
+            "llm_ms": 532,
+            "translation_ms": 1259,
+            "tts_ms": 0,
+            "total_ms": 3861
+          }
+        },
+        {
+          "user": "Ja, Fußball macht Spaß.",
+          "reply": "Ich komme aus dem Land. Wo wohnst du jetzt?",
+          "user_translation": "Футбол - это весело.",
+          "translation": "Я прихожу из страны. Где ты сейчас живёшь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich wohne in Moskau.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne in einem kleinen Dorf.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne bei meiner Familie.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1738,
+            "llm_ms": 533,
+            "translation_ms": 835,
+            "tts_ms": 0,
+            "total_ms": 3107
+          }
+        },
+        {
+          "user": "Was machst du am Wochenende?",
+          "reply": "Am Wochenende war ich im Park und habe ein Buch gelesen. Wo wohnst du?",
+          "user_translation": "Как ты проводишь время в эти выходные?",
+          "translation": "В субботу я пошел в парк и прочитал книгу. Где ты живёшь?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich wohne in Moskau.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne in einem kleinen Dorf.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne bei meiner Familie.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1268,
+            "llm_ms": 0,
+            "translation_ms": 1019,
+            "tts_ms": 0,
+            "total_ms": 2289
+          }
+        },
+        {
+          "user": "Ich habe kein Zeit am Sonntag.",
+          "reply": "Ich wohne in der Stadt. Wo wohnst du jetzt?",
+          "user_translation": "У меня нет времени воскресной.",
+          "translation": "Где ты сейчас живёшь?",
+          "corrections": [
+            {
+              "original": "Ich habe kein Zeit am Sonntag.",
+              "corrected": "Ich habe keine Zeit am Sonntag.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Ich wohne in Moskau.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne in einem kleinen Dorf.",
+              "translation": ""
+            },
+            {
+              "text": "Ich wohne bei meiner Familie.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2005,
+            "llm_ms": 613,
+            "translation_ms": 898,
+            "tts_ms": 0,
+            "total_ms": 3518
+          }
+        },
+        {
+          "user": "Ok, tschüss!",
+          "reply": "Tschüss! Es war schön, mit dir zu sprechen. Bis bald!",
+          "user_translation": "Пока! До встречи!",
+          "translation": "Пока! Было приятно с тобой поговорить. До скорого!",
+          "corrections": [],
+          "suggestions": [],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 4555,
+            "llm_ms": 0,
+            "translation_ms": 0,
+            "tts_ms": 0,
+            "total_ms": 4558
+          }
+        }
+      ]
+    },
+    {
+      "persona": "p3-past-a2",
+      "level": "A2",
+      "errorTurns": [
+        2,
+        4,
+        5,
+        7
+      ],
+      "turns": [
+        {
+          "user": "Hallo! Ich bin Maria. Wie geht es dir?",
+          "reply": "Hallo, ich bin Maria. Mir geht es gut. Was hast du am Wochenende gemacht?",
+          "user_translation": "Здравствуйте! У меня всё хорошо. А у вас?",
+          "translation": "Здравствуйте, я Мария. У меня всё хорошо. Что ты делал(а) на выходных?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Ich habe einen Film gesehen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich bin mit Freunden spazieren gegangen.",
+              "translation": ""
+            },
+            {
+              "text": "Ich war zu Hause.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1451,
+            "llm_ms": 909,
+            "translation_ms": 700,
+            "tts_ms": 0,
+            "total_ms": 3061
+          }
+        },
+        {
+          "user": "Am Wochenende ich habe einen Film gesehen.",
+          "reply": "Am Wochenende habe ich danach einen Apfel gegessen. Und wie war es? Erzähl mal!",
+          "user_translation": "В субботу я посмотрел фильм.",
+          "translation": "В субботу я съел яблоко. И как? Расскажи!",
+          "corrections": [
+            {
+              "original": "Am Wochenende ich habe einen Film gesehen.",
+              "corrected": "Am Wochenende habe ich einen Film gesehen.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Es war sehr schön.",
+              "translation": ""
+            },
+            {
+              "text": "Es war langweilig.",
+              "translation": ""
+            },
+            {
+              "text": "Es war lustig.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2072,
+            "llm_ms": 736,
+            "translation_ms": 685,
+            "tts_ms": 0,
+            "total_ms": 3495
+          }
+        },
+        {
+          "user": "Der Film war sehr gut und interessant.",
+          "reply": "Das Wochenende war super! Wie war dein Wochenende?",
+          "user_translation": "",
+          "translation": "Это было чудесное завершение недели. Как прошли твои выходные?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Es war sehr schön.",
+              "translation": ""
+            },
+            {
+              "text": "Es war langweilig.",
+              "translation": ""
+            },
+            {
+              "text": "Es war lustig.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1985,
+            "llm_ms": 477,
+            "translation_ms": 855,
+            "tts_ms": 0,
+            "total_ms": 3318
+          }
+        },
+        {
+          "user": "Ich bin ins Kino gegangen mit mein Freund.",
+          "reply": "Das klingt nach einem schönen Wochenende! Und wie war es? Erzähl mal!",
+          "user_translation": "Я пошел в кино с другом.",
+          "translation": "Это звучит как приятное завершение рабочего дня! И как? Расскажи!",
+          "corrections": [
+            {
+              "original": "Ich bin ins Kino gegangen mit mein Freund.",
+              "corrected": "Ich bin ins Kino gegangen mit meinem Freund.",
+              "explanation": ""
+            }
+          ],
+          "suggestions": [
+            {
+              "text": "Es war sehr schön.",
+              "translation": ""
+            },
+            {
+              "text": "Es war langweilig.",
+              "translation": ""
+            },
+            {
+              "text": "Es war lustig.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2676,
+            "llm_ms": 1258,
+            "translation_ms": 1037,
+            "tts_ms": 0,
+            "total_ms": 4973
+          }
+        },
+        {
+          "user": "Wir haben Pizza gegessen danach.",
+          "reply": "Das war lecker, danach! Was hast du danach gemacht?",
+          "user_translation": "Мы попили пиццу.",
+          "translation": "Это было вкусно, после этого! Что ты делал(а) потом?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Danach habe ich Pizza gegessen.",
+              "translation": ""
+            },
+            {
+              "text": "Danach bin ich nach Hause gegangen.",
+              "translation": ""
+            },
+            {
+              "text": "Danach habe ich lange geschlafen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1959,
+            "llm_ms": 566,
+            "translation_ms": 910,
+            "tts_ms": 0,
+            "total_ms": 3437
+          }
+        },
+        {
+          "user": "Und du? Was hast du am Wochenende gemacht?",
+          "reply": "Am Wochenende war ich im Park und habe ein Buch gelesen. Danach habe ich Kaffee getrunken. Und du?",
+          "user_translation": "У тебя что-то случилось в эти выходные?",
+          "translation": "В субботу я пошел в парк и прочитал книгу. Потом я выпила кофе. А ты?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Danach habe ich Pizza gegessen.",
+              "translation": ""
+            },
+            {
+              "text": "Danach bin ich nach Hause gegangen.",
+              "translation": ""
+            },
+            {
+              "text": "Danach habe ich lange geschlafen.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1245,
+            "llm_ms": 0,
+            "translation_ms": 1164,
+            "tts_ms": 0,
+            "total_ms": 2411
+          }
+        },
+        {
+          "user": "Nächste Woche ich besuche meine Eltern.",
+          "reply": "Nächstes Wochenende werde ich meine Eltern besuchen! Was machst du nächstes Wochenende?",
+          "user_translation": "Следующая неделя я буду посещать родителей.",
+          "translation": "На следующее воскресенье я буду посещать своих родителей. Что ты будешь делать в следующие выходные?",
+          "corrections": [],
+          "suggestions": [
+            {
+              "text": "Nächstes Wochenende besuche ich meine Eltern.",
+              "translation": ""
+            },
+            {
+              "text": "Ich bleibe zu Hause.",
+              "translation": ""
+            },
+            {
+              "text": "Ich fahre ans Meer.",
+              "translation": ""
+            }
+          ],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 2460,
+            "llm_ms": 662,
+            "translation_ms": 708,
+            "tts_ms": 0,
+            "total_ms": 3832
+          }
+        },
+        {
+          "user": "Ja, gerne! Auf Wiedersehen.",
+          "reply": "Tschüss! Es war schön, mit dir zu sprechen. Bis bald!",
+          "user_translation": "Пока! До встречи!",
+          "translation": "Пока! Было приятно с тобой поговорить. До скорого!",
+          "corrections": [],
+          "suggestions": [],
+          "follow_up": "",
+          "warning": null,
+          "timings": {
+            "corrections_ms": 1303,
+            "llm_ms": 0,
+            "translation_ms": 0,
+            "tts_ms": 0,
+            "total_ms": 1304
+          }
+        }
+      ]
+    }
+  ]
+}

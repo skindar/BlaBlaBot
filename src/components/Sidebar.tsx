@@ -1,13 +1,12 @@
-// Narrow left sidebar: brand, voice picker (current language + engine),
-// compact model status and the settings button. All other settings
-// live in SettingsModal (the gear icon).
+// Narrow left sidebar: brand, level, voice picker, the "Let's talk
+// about…" free-form topic/instructions field, compact model status and
+// the settings button. All other settings live in SettingsModal.
 
 import { useEffect, useState } from 'react'
 import type { Level, ModelHealth, Settings, WebHealth, WebModelHealth } from '../types'
 import { useI18n } from '../i18n'
-import { langInfo } from '../lib/langs'
+import { langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
 import { LlmEngine, llmModelByKey } from '../lib/llm'
-import { phononVoices } from '../lib/langs'
 import { ttsEngine } from '../lib/tts'
 
 interface Props {
@@ -68,7 +67,12 @@ export function Sidebar({ settings, onChange, health, onOpenSettings }: Props) {
     }
   }, [settings.ttsEngine, lang, health, t])
 
-  const voice = settings.ttsVoices[lang] ?? ''
+  const phononBase = settings.phononBases[lang] ?? info.phononBase
+  const voice =
+    settings.ttsEngine === 'phonon'
+      ? resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])
+      : settings.ttsVoices[lang] ?? ''
+  const currentLlm = llmModelByKey(settings.llmModel)
 
   return (
     <aside className="sidebar">
@@ -105,7 +109,7 @@ export function Sidebar({ settings, onChange, health, onOpenSettings }: Props) {
             value={voice}
             onChange={e => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: e.target.value } })}
           >
-            {phononVoices(lang, settings.phononBases[lang] ?? info.phononBase).map(v => (
+            {phononVoices(lang, phononBase).map(v => (
               <option key={v.name} value={v.name}>
                 {v.name}
               </option>
@@ -127,15 +131,46 @@ export function Sidebar({ settings, onChange, health, onOpenSettings }: Props) {
         )}
       </div>
 
+      <div className="group topic-group">
+        <label htmlFor="topic-extra">{t('talkAbout')}</label>
+        {settings.diaryMode ? (
+          <p className="hint-note">{t('diaryModeHint')}</p>
+        ) : (
+          <>
+            <textarea
+              id="topic-extra"
+              rows={3}
+              value={settings.extraPrompt}
+              placeholder={t('topicPlaceholder')}
+              onChange={e => onChange({ extraPrompt: e.target.value })}
+            />
+            <p className="hint-note">{t('topicHint')}</p>
+          </>
+        )}
+      </div>
+
+      <div className="group row diary-toggle">
+        <input
+          id="diary-mode"
+          type="checkbox"
+          checked={Boolean(settings.diaryMode)}
+          onChange={e => onChange({ diaryMode: e.target.checked })}
+        />
+        <label htmlFor="diary-mode">📖 {t('diaryMode')}</label>
+      </div>
+
       <div className="group models compact">
         <ul>
           <li title={`${t('asrRow')}: ${modelStatus(health?.models.asr, t)}`}>
             <span className={`dot ${dotClass(health?.models.asr)}`} />
             <span className="model-name">ASR</span>
           </li>
-          <li title={`${llmModelByKey(settings.llmModel).label} (LLM): ${modelStatus(health?.models.llm, t)}`}>
+          <li title={`${currentLlm.label} (LLM): ${modelStatus(health?.models.llm, t)}`}>
             <span className={`dot ${dotClass(health?.models.llm)}`} />
-            <span className="model-name">LLM</span>
+            <span className="model-name llm-current">
+              <span className="brain" aria-hidden="true">🧠</span>
+              <span className="llm-label">{currentLlm.label}</span>
+            </span>
           </li>
           <li title={`${t('ttsRow')}: ${modelStatus(health?.models.tts, t)}`}>
             <span className={`dot ${dotClass(health?.models.tts)}`} />

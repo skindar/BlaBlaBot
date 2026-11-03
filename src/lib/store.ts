@@ -5,9 +5,9 @@
 // History and vocabulary are kept per target language (with migration of
 // the old German-only keys).
 
-import type { Correction, HistoryMessage, VocabItem } from '../types'
+import type { Correction, DiaryEntry, HistoryMessage, VocabItem } from '../types'
 import { TARGET_LANG_LIST, type TargetLang } from './langs'
-import rawDictionary from '../data/deu-rus.json'
+import type { TutorSession } from './scenarios'
 
 const SEQ_KEY = 'gt-web-seq'
 const ONBOARD_KEY = 'blablabot-onboarded'
@@ -32,17 +32,6 @@ function migrateLegacyKey(legacyKey: string, newKey: string): void {
   localStorage.removeItem(legacyKey)
 }
 
-interface StoredMessage {
-  id: number
-  role: 'user' | 'tutor'
-  text: string
-  user_translation: string
-  corrections: Correction[]
-  translation: string
-  follow_up: string
-  created_at: string
-}
-
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
@@ -63,7 +52,35 @@ function nextId(): number {
   return seq
 }
 
+// ---------- Change events (Drive sync schedules its pushes off these) ----------
+
+export type DirtyKind = 'vocab' | 'history' | 'diary'
+let dirtyHandler: ((kind: DirtyKind, lang: TargetLang) => void) | null = null
+
+export function setStoreDirtyHandler(fn: ((kind: DirtyKind, lang: TargetLang) => void) | null): void {
+  dirtyHandler = fn
+}
+
+function fireDirty(kind: DirtyKind, lang: TargetLang): void {
+  try {
+    dirtyHandler?.(kind, lang)
+  } catch {
+    /* a sync error must never break the pipeline */
+  }
+}
+
 // ---------- Dialog history (ConversationStore port, per language) ----------
+
+export interface StoredMessage {
+  id: number
+  role: 'user' | 'tutor'
+  text: string
+  user_translation: string
+  corrections: Correction[]
+  translation: string
+  follow_up: string
+  created_at: string
+}
 
 export const conversation = {
   addUser(lang: TargetLang, text: string, translation = ''): void {
@@ -80,6 +97,7 @@ export const conversation = {
       created_at: new Date().toISOString(),
     })
     writeJson(messagesKey(lang), messages)
+    fireDirty('history', lang)
   },
 
   addTutor(
@@ -101,6 +119,7 @@ export const conversation = {
       created_at: new Date().toISOString(),
     })
     writeJson(messagesKey(lang), messages)
+    fireDirty('history', lang)
   },
 
   /** Port of history_for_llm: last N messages; tutor text is concatenated with follow_up */
@@ -137,7 +156,20 @@ export const conversation = {
     migrateLegacyKey('gt-web-messages', messagesKey(lang))
     const messages = readJson<StoredMessage[]>(messagesKey(lang), [])
     writeJson(messagesKey(lang), [])
+    fireDirty('history', lang)
     return messages.length
+  },
+
+  /** Raw messages for the Drive sync (exact stored shape) */
+  loadRaw(lang: TargetLang): StoredMessage[] {
+    migrateLegacyKey('gt-web-messages', messagesKey(lang))
+    return readJson<StoredMessage[]>(messagesKey(lang), [])
+  },
+
+  /** Replace the whole conversation (Drive sync merge) */
+  replaceRaw(lang: TargetLang, messages: StoredMessage[]): void {
+    writeJson(messagesKey(lang), messages)
+    fireDirty('history', lang)
   },
 }
 
@@ -159,6 +191,21 @@ function normalizeWord(word: string, lang: TargetLang): string {
   return w
 }
 
+/** Stable sync id for legacy items (created before uid existed) */
+function legacyUid(id: number, createdAt: string): string {
+  return `v${id}-${createdAt}`
+}
+
+/** Backfill uid/updated_at on read; items written before the Drive sync lack them */
+function withSyncFields(item: VocabItem, lang: TargetLang): VocabItem {
+  return {
+    ...item,
+    uid: item.uid ?? legacyUid(item.id, item.created_at),
+    updated_at: item.updated_at ?? item.created_at,
+    lang,
+  }
+}
+
 /** Port of words_match: match when one normalized form contains the other */
 function wordsMatch(a: string, b: string, lang: TargetLang): boolean {
   const na = normalizeWord(a, lang)
@@ -172,7 +219,7 @@ export const vocab = {
     const items = readJson<VocabItem[]>(vocabKey(lang), [])
     // unknown first, newest on top within a group (like list_all in vocab.py)
     return [...items]
-      .map(i => ({ ...i, lang }))
+      .map(i => withSyncFields(i, lang))
       .sort((a, b) => Number(a.known) - Number(b.known) || b.id - a.id)
   },
 
@@ -182,7 +229,7 @@ export const vocab = {
     for (const lang of TARGET_LANG_LIST) {
       migrateLegacyKey('gt-web-vocab', vocabKey(lang))
       for (const item of readJson<VocabItem[]>(vocabKey(lang), [])) {
-        out.push({ ...item, lang })
+        out.push(withSyncFields(item, lang))
       }
     }
     return out
@@ -206,26 +253,34 @@ export const vocab = {
     migrateLegacyKey('gt-web-vocab', vocabKey(lang))
     const items = readJson<VocabItem[]>(vocabKey(lang), [])
     const existing = items.find(i => wordsMatch(i.word, word, lang))
-    if (existing) return { ...existing, lang }
+    if (existing) return withSyncFields(existing, lang)
+    const now = new Date().toISOString()
     const item: VocabItem = {
       id: nextId(),
+      uid: (globalThis.crypto?.randomUUID?.() ?? `v${nextId()}-${now}`),
       word,
       translation,
       part_of_speech: partOfSpeech,
       example,
       example_translation: exampleTranslation,
       known: false,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
       lang,
     }
     items.push(item)
     writeJson(vocabKey(lang), items)
+    fireDirty('vocab', lang)
     return item
   },
 
   /** Overwrite a language's vocabulary (used by Drive sync) */
   replaceAll(lang: TargetLang, items: VocabItem[]): void {
-    writeJson(vocabKey(lang), items.map(({ lang: _lang, ...rest }) => rest))
+    const stripped = items
+      .filter(i => (i.lang ?? lang) === lang)
+      .map(({ lang: _lang, ...rest }) => rest)
+    writeJson(vocabKey(lang), stripped)
+    fireDirty('vocab', lang)
   },
 
   setKnown(lang: TargetLang, id: number, known: boolean): boolean {
@@ -234,7 +289,9 @@ export const vocab = {
     const item = items.find(i => i.id === id)
     if (!item) return false
     item.known = known
+    item.updated_at = new Date().toISOString()
     writeJson(vocabKey(lang), items)
+    fireDirty('vocab', lang)
     return true
   },
 
@@ -244,6 +301,7 @@ export const vocab = {
     const next = items.filter(i => i.id !== id)
     if (next.length === items.length) return false
     writeJson(vocabKey(lang), next)
+    fireDirty('vocab', lang)
     return true
   },
 }
@@ -251,26 +309,138 @@ export const vocab = {
 // ---------- Offline deu-rus dictionary (German only) ----------
 
 type DictEntry = { t: string[]; pos?: string }
-const dictionary = rawDictionary as Record<string, DictEntry>
+let dictionaryCache: Record<string, DictEntry> | null = null
+let dictionaryLoading: Promise<Record<string, DictEntry>> | null = null
 
-function lookupDictEntry(word: string): DictEntry | null {
+/** The dictionary is a 2.2 MB JSON. It loads as a lazy chunk on the first
+ *  German lookup — learners of other languages never download it. */
+function dictionary(): Promise<Record<string, DictEntry>> {
+  if (dictionaryCache) return Promise.resolve(dictionaryCache)
+  dictionaryLoading ??= import('../data/deu-rus.json').then(m => {
+    dictionaryCache = m as unknown as Record<string, DictEntry>
+    return dictionaryCache
+  })
+  return dictionaryLoading
+}
+
+async function lookupDictEntry(word: string): Promise<DictEntry | null> {
+  const dict = await dictionary()
   const normalized = word.trim().toLowerCase()
   if (!normalized) return null
-  const direct = dictionary[normalized]
+  const direct = dict[normalized]
   if (direct) return direct
   const stripped = normalizeWord(normalized, 'de')
   if (stripped && stripped !== normalized) {
-    const alt = dictionary[stripped]
+    const alt = dict[stripped]
     if (alt) return alt
   }
   return null
 }
 
 /** Port of OfflineDictionary.lookup: first 3 translations + part of speech (de only) */
-export function lookupDictionary(word: string): { translations: string[]; pos: string } {
-  const entry = lookupDictEntry(word)
+export async function lookupDictionary(word: string): Promise<{ translations: string[]; pos: string }> {
+  const entry = await lookupDictEntry(word)
   if (!entry) return { translations: [], pos: '' }
   return { translations: (entry.t ?? []).slice(0, 3), pos: entry.pos ?? '' }
+}
+
+// ---------- Tutor session (scenario progress, per language) ----------
+
+const SESSION_KEY_PREFIX = 'gt-web-session-'
+
+export const tutorSession = {
+  get(lang: TargetLang): TutorSession | null {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY_PREFIX + lang)
+      if (raw) return JSON.parse(raw) as TutorSession
+    } catch {
+      /* corrupt — start fresh */
+    }
+    return null
+  },
+  set(lang: TargetLang, session: TutorSession): void {
+    try {
+      localStorage.setItem(SESSION_KEY_PREFIX + lang, JSON.stringify(session))
+    } catch {
+      /* private mode */
+    }
+  },
+  reset(lang: TargetLang): void {
+    try {
+      localStorage.removeItem(SESSION_KEY_PREFIX + lang)
+    } catch {
+      /* private mode */
+    }
+  },
+}
+
+// ---------- Diary (diary mode: the student's own words about their day) ----------
+
+const DIARY_KEY = 'gt-web-diary'
+const DIARY_STATE_KEY_PREFIX = 'gt-web-diary-state-'
+
+function newUid(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `d${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/** Local calendar date (YYYY-MM-DD) — diary days are where the student lives */
+export function localDate(iso: string): string {
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+export const diary = {
+  append(lang: TargetLang, text: string, translation: string, corrected?: string): DiaryEntry {
+    const entries = readJson<DiaryEntry[]>(DIARY_KEY, [])
+    const now = new Date().toISOString()
+    const entry: DiaryEntry = {
+      uid: newUid(),
+      lang,
+      date: localDate(now),
+      text,
+      corrected,
+      translation,
+      created_at: now,
+    }
+    entries.push(entry)
+    writeJson(DIARY_KEY, entries)
+    fireDirty('diary', lang)
+    return entry
+  },
+
+  list(lang?: TargetLang): DiaryEntry[] {
+    const entries = readJson<DiaryEntry[]>(DIARY_KEY, [])
+    return entries
+      .filter(e => !lang || e.lang === lang)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+  },
+
+  delete(uid: string): boolean {
+    const entries = readJson<DiaryEntry[]>(DIARY_KEY, [])
+    const next = entries.filter(e => e.uid !== uid)
+    if (next.length === entries.length) return false
+    writeJson(DIARY_KEY, next)
+    const removed = entries.find(e => e.uid === uid)
+    if (removed) fireDirty('diary', removed.lang)
+    return true
+  },
+
+  /** Replace all entries (Drive sync merge) */
+  replaceAll(entries: DiaryEntry[]): void {
+    writeJson(DIARY_KEY, entries)
+    for (const lang of TARGET_LANG_LIST) {
+      if (entries.some(e => e.lang === lang)) fireDirty('diary', lang)
+    }
+  },
+
+  /** Listening-question rotation state (diary mode, per language) */
+  state(lang: TargetLang): { qIdx: number } {
+    return readJson(DIARY_STATE_KEY_PREFIX + lang, { qIdx: 0 })
+  },
+  setState(lang: TargetLang, state: { qIdx: number }): void {
+    writeJson(DIARY_STATE_KEY_PREFIX + lang, state)
+  },
 }
 
 // ---------- Onboarding ----------

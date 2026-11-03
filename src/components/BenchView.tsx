@@ -66,9 +66,9 @@ export function BenchView({ active, targetLang, uiLang }: Props) {
     refresh()
   }, [active, refresh])
 
-  // Default selection: the four article models that exist in this web-llm build
+  // Default selection: the curated model list
   useEffect(() => {
-    const preferred = ['qwen3-1.7b', 'gemma-4-e2b', 'qwen3-0.6b', 'gemma3-1b']
+    const preferred = ['gemma-3-1b', 'llama-3.2-1b', 'qwen2.5-1.5b', 'gemma-4-e2b']
     setChecked(Object.fromEntries(models.map(m => [m.key, preferred.includes(m.key)])))
   }, [models])
 

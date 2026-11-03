@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BenchView } from './components/BenchView'
+import { DiaryView } from './components/DiaryView'
 import { FlashcardsView } from './components/FlashcardsView'
 import { MessageList } from './components/MessageList'
 import { OnboardingModal } from './components/OnboardingModal'
@@ -20,9 +21,10 @@ import {
   type TtsSettings,
 } from './lib/engine'
 import { DEFAULT_ASR_KEY } from './lib/asr'
-import { DEFAULT_LLM_KEY } from './lib/llm'
-import { defaultPhononVoice, langInfo } from './lib/langs'
+import { DEFAULT_LLM_KEY, availableLlmModels } from './lib/llm'
+import { langInfo, resolvePhononVoice } from './lib/langs'
 import { conversation, onboarding } from './lib/store'
+import { configureSync, initSyncEvents } from './lib/sync'
 import { I18nProvider, makeT, setLibLang, type UiLang } from './i18n'
 import type { TargetLang } from './lib/langs'
 import type { ChatMessage, ChatResponse, Settings, Stage } from './types'
@@ -70,21 +72,28 @@ function loadSettings(): Settings {
   try {
     const parsed = JSON.parse(raw) as Partial<Settings> & { ttsVoice?: string; phononBase?: string }
     const s: Settings = { ...defaultSettings(), ...parsed }
+    // the saved model may have been removed from the curated list
+    if (!availableLlmModels().some(m => m.key === s.llmModel)) s.llmModel = DEFAULT_LLM_KEY
     if (parsed.ttsVoice && !parsed.ttsVoices) s.ttsVoices = { de: parsed.ttsVoice }
     if (parsed.phononBase && !parsed.phononBases) s.phononBases = { de: parsed.phononBase }
     delete (s as unknown as Record<string, unknown>).ttsVoice
     delete (s as unknown as Record<string, unknown>).phononBase
+    delete (s as unknown as Record<string, unknown>).topic
     return s
   } catch {
     return defaultSettings()
   }
 }
 
-/** Voice for the target language: saved value or the default */
+/** Voice for the target language: saved value or the default. For Phonon the
+ *  name is validated against what the selected model actually offers — a
+ *  stale name (base switched, voice not hosted) falls back to the default. */
 function resolveVoice(settings: Settings, lang: TargetLang): string {
   const saved = settings.ttsVoices[lang]
-  if (saved) return saved
-  return settings.ttsEngine === 'phonon' ? defaultPhononVoice(lang) : ''
+  if (settings.ttsEngine === 'phonon') {
+    return resolvePhononVoice(lang, resolvePhononBase(settings, lang), saved)
+  }
+  return saved ?? ''
 }
 
 /** Phonon model base URL for the target language: saved value or the default */
@@ -98,7 +107,7 @@ function AppInner() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [timings, setTimings] = useState<Record<string, number> | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'chat' | 'cards' | 'bench'>('chat')
+  const [tab, setTab] = useState<'chat' | 'cards' | 'diary' | 'bench'>('chat')
   const [selection, setSelection] = useState<{ word: string; x: number; y: number } | null>(null)
   const [vocabToast, setVocabToast] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -136,6 +145,14 @@ function AppInner() {
     setLibLang(settings.uiLang)
     document.documentElement.lang = settings.uiLang
   }, [settings.uiLang])
+
+  // Drive sync: wire store events once, follow the client id / auto-sync settings
+  useEffect(() => {
+    initSyncEvents()
+  }, [])
+  useEffect(() => {
+    configureSync({ clientId: settings.googleClientId, autoSync: settings.driveAutoSync })
+  }, [settings.googleClientId, settings.driveAutoSync])
 
   // Theme: data-theme on <html>; "system" follows prefers-color-scheme
   useEffect(() => {
@@ -230,7 +247,8 @@ function AppInner() {
           targetLang: lang,
           uiLang: settings.uiLang,
           llmKey: settings.llmModel,
-          extraPrompt: settings.extraPrompt,
+          extraPrompt: settings.extraPrompt.trim(),
+          diaryMode: settings.diaryMode,
           tts: ttsSettings,
         })) as ChatResponse
         setTimings(data.timings)
@@ -382,6 +400,9 @@ function AppInner() {
           <button type="button" className={`tab${tab === 'cards' ? ' active' : ''}`} onClick={() => setTab('cards')}>
             {t('tabCards')}
           </button>
+          <button type="button" className={`tab${tab === 'diary' ? ' active' : ''}`} onClick={() => setTab('diary')}>
+            {t('tabDiary')}
+          </button>
           {settings.showBench && (
             <button type="button" className={`tab${tab === 'bench' ? ' active' : ''}`} onClick={() => setTab('bench')}>
               {t('tabBench')}
@@ -444,6 +465,8 @@ function AppInner() {
             targetLang={lang}
             uiLang={settings.uiLang}
           />
+        ) : tab === 'diary' ? (
+          <DiaryView active={tab === 'diary'} targetLang={lang} uiLang={settings.uiLang} />
         ) : tab === 'bench' && settings.showBench ? (
           <BenchView active={tab === 'bench'} targetLang={lang} uiLang={settings.uiLang} />
         ) : null}
