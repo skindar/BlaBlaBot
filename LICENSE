@@ -32,5 +32,10 @@ Third-party notices (not covered by the MIT license above):
   own licenses (Gemma Terms of Use, Apache-2.0, CC BY-NC 4.0 respectively).
   Anyone redistributing those files must follow those licenses and credit
   the sources — see "Where the Phonon model files come from" in the README.
-- src/data/deu-rus.json is an offline German→Russian dictionary bundled for
-  the fast-path word lookup; check its origin before redistributing.
+- src/data/deu-rus.json is an offline German→Russian dictionary (26k
+  entries), derived from FreeDict deu-rus
+  (https://download.freedict.org/dictionaries/deu-rus/), built by
+  backend/scripts/build_dict.py in the native version. FreeDict dictionaries
+  are released under GPL-2.0-or-later / CC BY-SA by their contributors; this
+  derived data file keeps that license — the MIT license above applies to
+  the application code only.

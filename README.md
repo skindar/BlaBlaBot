@@ -188,7 +188,10 @@ web/
 
 ## License
 
-The code is [MIT-licensed](./LICENSE). The repository ships no model weights:
-the LLM/ASR/TTS models are downloaded by the visitor's browser and governed
-by their own licenses (Gemma Terms of Use, Apache-2.0, CC BY-NC 4.0 — see
-the notes in LICENSE and the Phonon section above).
+The application code is [MIT-licensed](./LICENSE). Two exceptions inside the
+repository: `src/data/deu-rus.json` is derived from the
+[FreeDict](https://freedict.org/) deu-rus dictionary (GPL-2.0+/CC BY-SA, see
+LICENSE), and the repository ships no model weights — the LLM/ASR/TTS models
+are downloaded by the visitor's browser and governed by their own licenses
+(Gemma Terms of Use, Apache-2.0, CC BY-NC 4.0 — see the notes in LICENSE and
+the Phonon section above).
