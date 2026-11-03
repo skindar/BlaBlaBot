@@ -57,6 +57,20 @@ export async function cloudChat(
   }
   const t0 = performance.now()
   let ttftMs: number | null = null
+  // GLM-5.x spends most of the token budget on hidden reasoning before the
+  // answer — deadly for a voice tutor. Z.AI/BigModel endpoints accept an
+  // explicit off-switch; other providers get the param omitted and, if they
+  // reject it with a 400, one retry without it.
+  const glmHost = /z\.ai|bigmodel|zhipu/i.test(base)
+  const buildBody = (withThinkingOff: boolean) => ({
+    model: cfg.model.trim(),
+    messages,
+    stream: true,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 900,
+    ...(opts.stop ? { stop: opts.stop } : {}),
+    ...(withThinkingOff ? { thinking: { type: 'disabled' } } : {}),
+  })
   let response: Response
   try {
     response = await fetch(`${base}/chat/completions`, {
@@ -65,14 +79,7 @@ export async function cloudChat(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${cfg.apiKey.trim()}`,
       },
-      body: JSON.stringify({
-        model: cfg.model.trim(),
-        messages,
-        stream: true,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 900,
-        ...(opts.stop ? { stop: opts.stop } : {}),
-      }),
+      body: JSON.stringify(buildBody(glmHost)),
       signal: AbortSignal.timeout(120_000),
     })
   } catch (err) {

@@ -658,7 +658,9 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       })
       tutorMethod = 'template'
     }
-    suggestions = prescribedChips(scenario, session)
+    // chips answer the question this reply asks — the one taken from
+    // sessionForGrounding (after the intro jump), not the stale session
+    suggestions = prescribedChips(scenario, sessionForGrounding)
     if (suggestions.length === 0) suggestions = cleanSuggestions(parsed.suggestions, uiLang, targetLang)
     tutorSession.set(targetLang, advanceFullSession(scenario, sessionForGrounding))
 
