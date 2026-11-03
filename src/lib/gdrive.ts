@@ -150,6 +150,8 @@ export async function requestToken(clientId: string, interactive: boolean): Prom
 }
 
 export function signOut(): void {
+  folderId = null
+  fileIds = null
   const rec = readStoredToken()
   if (rec) {
     try {
@@ -212,14 +214,27 @@ async function ensureFolder(): Promise<string> {
   return folderId
 }
 
-async function findDataFile(name: string): Promise<DriveFile | null> {
+/** name -> file id for everything in the app folder, fetched in ONE list
+ *  call and cached: every load/save then resolves locally (the map also
+ *  makes legacy-file checks free — absent names cost zero requests) */
+let fileIds: Map<string, string> | null = null
+
+async function folderFileIds(): Promise<Map<string, string>> {
+  if (fileIds) return fileIds
   const parent = await ensureFolder()
-  const q = encodeURIComponent(`name = '${name}' and '${parent}' in parents and trashed = false`)
+  const q = encodeURIComponent(`'${parent}' in parents and trashed = false`)
   const res = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&pageSize=5`,
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=200`,
   )
   const data = (await res.json()) as { files?: DriveFile[] }
-  return data.files?.[0] ?? null
+  fileIds = new Map((data.files ?? []).map(f => [f.name, f.id]))
+  return fileIds
+}
+
+async function findDataFile(name: string): Promise<DriveFile | null> {
+  const map = await folderFileIds()
+  const id = map.get(name)
+  return id ? { id, name } : null
 }
 
 /** Download a JSON file; null when it does not exist yet (legacy pulls) */
@@ -255,10 +270,12 @@ export async function saveText(name: string, text: string, mimeType: string): Pr
     new Blob([JSON.stringify({ name, parents: [parent] })], { type: 'application/json' }),
   )
   form.append('file', new Blob([text], { type: mimeType }))
-  await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+  const created = await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
     method: 'POST',
     body: form,
   })
+  const file = (await created.json()) as DriveFile
+  fileIds?.set(name, file.id)
 }
 
 /** The signed-in user's email (Drive-scoped about endpoint) */

@@ -287,8 +287,9 @@ export function InputCard({
           {error}
         </p>
       )}
-      {timings && (
+      {timings && import.meta.env.DEV && (
         <p className="mt-2 text-center text-[10px] tabular-nums text-[#94988f]">
+          {/* dev-only: raw stage timings; users see them properly on the Bench tab */}
           {[timings.asr_ms, timings.llm_ms, timings.translation_ms, timings.tts_ms, timings.total_ms]
             .filter(v => typeof v === 'number')
             .map(v => `${v}`)

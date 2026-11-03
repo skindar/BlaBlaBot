@@ -133,6 +133,7 @@ async function resumeSession(): Promise<void> {
 
 export function doSignOut(): void {
   signOut()
+  pulledCache.clear()
   update({ signedIn: false, email: null, lastSyncAt: null, error: null })
 }
 
@@ -176,74 +177,104 @@ function mergeActivity(local: Record<string, number>, remote: Record<string, num
   return out
 }
 
+/** what Drive held at the last pull — unchanged files are not re-uploaded */
+const pulledCache = new Map<string, string | null>()
+
+async function pullFile(name: string): Promise<string | null> {
+  const text = await loadText(name)
+  pulledCache.set(name, text)
+  return text
+}
+
+/** Upload only when the content actually differs from what Drive holds;
+ *  a fresh install with no data creates no files at all */
+async function pushFileIfChanged(name: string, mime: string, text: string, hasData: boolean): Promise<void> {
+  const remote = pulledCache.get(name) ?? null
+  if (!hasData && remote === null) return
+  if (text === remote) return
+  await saveText(name, text, mime)
+  pulledCache.set(name, text)
+}
+
 async function pullAll(): Promise<void> {
-  // vocab — cards.csv (legacy vocab.json still read once)
-  let remoteVocab = await loadText(VOCAB_FILE)
-  if (remoteVocab !== null && remoteVocab.trim() !== '') {
-    const items = vocabFromCsv(remoteVocab)
+  // per-language chat pulls run in parallel
+  const historyTasks = TARGET_LANG_LIST.map(async lang => {
+    const remoteText = await pullFile(historyFileName(lang))
+    if (remoteText !== null && remoteText.trim() !== '') {
+      const merged = mergeHistory(conversation.loadRaw(lang), historyFromMd(remoteText))
+      conversation.replaceRaw(lang, merged)
+      return
+    }
+    // legacy json files resolve from the same cached file map — no extra calls
+    const legacy = await loadJson<{ messages: StoredMessage[] }>(legacyHistoryFileName(lang))
+    if (legacy?.messages?.length) {
+      conversation.replaceRaw(lang, mergeHistory(conversation.loadRaw(lang), legacy.messages))
+    }
+  })
+  const vocabTask = (async () => {
+    const remote = await pullFile(VOCAB_FILE)
+    const items = remote !== null && remote.trim() !== '' ? vocabFromCsv(remote) : []
+    if (items.length === 0) {
+      const legacy = await loadJson<{ items: VocabItem[] }>(LEGACY_VOCAB_FILE)
+      if (legacy?.items?.length) items.push(...legacy.items)
+    }
     if (items.length > 0) {
       const merged = mergeVocab(vocab.allLangs(), items)
       for (const lang of TARGET_LANG_LIST) {
         vocab.replaceAll(lang, merged.filter(i => (i.lang ?? 'de') === lang))
       }
     }
-  } else {
-    const legacy = await loadJson<{ items: VocabItem[] }>(LEGACY_VOCAB_FILE)
-    if (legacy?.items?.length) {
-      const merged = mergeVocab(vocab.allLangs(), legacy.items)
-      for (const lang of TARGET_LANG_LIST) {
-        vocab.replaceAll(lang, merged.filter(i => (i.lang ?? 'de') === lang))
-      }
+  })()
+  const diaryTask = (async () => {
+    const remote = await pullFile(DIARY_FILE)
+    const entries = remote !== null && remote.trim() !== '' ? diaryFromMd(remote) : []
+    if (entries.length === 0) {
+      const legacy = await loadJson<{ entries: DiaryEntry[] }>(LEGACY_DIARY_FILE)
+      if (legacy?.entries?.length) entries.push(...legacy.entries)
     }
-  }
-  // history (per language) — chat-{lang}.md (legacy history-{lang}.json)
-  for (const lang of TARGET_LANG_LIST) {
-    const remoteText = await loadText(historyFileName(lang))
-    if (remoteText !== null && remoteText.trim() !== '') {
-      const merged = mergeHistory(conversation.loadRaw(lang), historyFromMd(remoteText))
-      conversation.replaceRaw(lang, merged)
-      continue
-    }
-    const legacy = await loadJson<{ messages: StoredMessage[] }>(legacyHistoryFileName(lang))
-    if (legacy?.messages?.length) {
-      conversation.replaceRaw(lang, mergeHistory(conversation.loadRaw(lang), legacy.messages))
-    }
-  }
-  // diary — diary.md (legacy diary.json)
-  const remoteDiaryText = await loadText(DIARY_FILE)
-  if (remoteDiaryText !== null && remoteDiaryText.trim() !== '') {
-    const entries = diaryFromMd(remoteDiaryText)
     if (entries.length > 0) diary.replaceAll(mergeDiary(diary.list(), entries))
-  } else {
-    const legacy = await loadJson<{ entries: DiaryEntry[] }>(LEGACY_DIARY_FILE)
-    if (legacy?.entries?.length) diary.replaceAll(mergeDiary(diary.list(), legacy.entries))
-  }
-  // activity — activity.csv
-  const remoteActivity = await loadText(ACTIVITY_FILE)
-  if (remoteActivity !== null && remoteActivity.trim() !== '') {
-    activity.replaceAll(mergeActivity(activity.list(), activityFromCsv(remoteActivity)))
-  }
-  // normalize Drive to the fresh merged state of every kind
-  await pushKind('vocab', 'de')
-  await pushKind('diary', 'de')
-  await pushKind('activity', 'de')
-  for (const lang of TARGET_LANG_LIST) await pushKind('history', lang)
+  })()
+  const activityTask = (async () => {
+    const remote = await pullFile(ACTIVITY_FILE)
+    if (remote !== null && remote.trim() !== '') {
+      activity.replaceAll(mergeActivity(activity.list(), activityFromCsv(remote)))
+    }
+  })()
+
+  await Promise.all([vocabTask, diaryTask, activityTask, ...historyTasks])
+
+  // normalize Drive to the merged state — unchanged files stay untouched
+  const lang = TARGET_LANG_LIST[0]
+  await pushKind('vocab', lang)
+  await pushKind('diary', lang)
+  await pushKind('activity', lang)
+  for (const l of TARGET_LANG_LIST) await pushKind('history', l)
 }
 
 /** Push one data kind; used by the debounced auto-push and after a pull */
 async function pushKind(kind: DirtyKind, lang: TargetLang): Promise<void> {
   if (kind === 'vocab') {
-    await saveText(VOCAB_FILE, vocabToCsv(vocab.allLangs()), 'text/csv')
+    const items = vocab.allLangs()
+    await pushFileIfChanged(VOCAB_FILE, 'text/csv', vocabToCsv(items), items.length > 0)
   } else if (kind === 'history') {
-    await saveText(
+    const messages = conversation.loadRaw(lang)
+    await pushFileIfChanged(
       historyFileName(lang),
-      historyToMd(lang, conversation.loadRaw(lang)),
       'text/markdown',
+      historyToMd(lang, messages),
+      messages.length > 0,
     )
   } else if (kind === 'activity') {
-    await saveText(ACTIVITY_FILE, activityToCsv(activity.list()), 'text/csv')
+    const days = activity.list()
+    await pushFileIfChanged(
+      ACTIVITY_FILE,
+      'text/csv',
+      activityToCsv(days),
+      Object.keys(days).length > 0,
+    )
   } else {
-    await saveText(DIARY_FILE, diaryToMd(diary.list()), 'text/markdown')
+    const entries = diary.list()
+    await pushFileIfChanged(DIARY_FILE, 'text/markdown', diaryToMd(entries), entries.length > 0)
   }
 }
 
