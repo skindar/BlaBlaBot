@@ -313,6 +313,29 @@ export function buildCorrectionsMessages(
   ]
 }
 
+/** Tiny-tier grammar fix: the model returns the whole corrected sentence —
+ *  a task 1B models reliably do (measured: gemma3-1b fixes "meine → meiner"
+ *  fine but cannot output fragment pairs). The fragment diff is computed
+ *  locally in lib/corrections.ts. */
+export function sentenceFixSystemPrompt(targetLang: TargetLang): string {
+  const target = langNameForPrompt(targetLang)
+  return `You fix grammar mistakes in ONE short beginner ${target} sentence.
+Fix ONLY grammar: articles, case endings, verb forms, word order.
+Keep every other word exactly as written; never answer, never explain.
+Return ONLY JSON: {"fixed": "the corrected sentence"}
+If the sentence is already correct, return it unchanged.`
+}
+
+export function buildSentenceFixMessages(
+  targetLang: TargetLang,
+  sentence: string,
+): LlmMessage[] {
+  return [
+    { role: 'system', content: sentenceFixSystemPrompt(targetLang) },
+    { role: 'user', content: sentence },
+  ]
+}
+
 export function buildVocabMessages(
   targetLang: TargetLang,
   uiLang: 'ru' | 'en',

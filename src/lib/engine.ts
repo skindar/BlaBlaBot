@@ -27,7 +27,6 @@ import {
 } from './parse'
 import {
   buildTutorMessages,
-  buildCorrectionsMessages,
   buildTranslateMessages,
   buildSingleTranslateMessages,
   buildSuggestionsMessages,
@@ -38,7 +37,7 @@ import {
   vocabNotRealDefaultComment,
   type LlmMessage,
 } from '../prompts'
-import { parseCorrectionsJson } from './parse'
+import { tinyCorrections } from './corrections'
 import { contextWindowFor } from './llm'
 import { conversation, diary, lookupDictionary, tutorSession, vocab } from './store'
 import { ttsEngine } from './tts'
@@ -67,7 +66,6 @@ export class InvalidParameterError extends PipelineError {}
 const LLM_TEMPERATURE = 0.7
 const LLM_TRANSLATION_TEMPERATURE = 0.2
 const LLM_VOCAB_TEMPERATURE = 0.3
-const LLM_CORRECTIONS_TEMPERATURE = 0.2
 const LLM_SUGGESTIONS_TEMPERATURE = 0.5
 
 /** Calibrated chars-per-token per model (updated after every tutor call with
@@ -438,38 +436,33 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   /** deterministic reply composition (tiny tier): translate the reaction only */
   let tutorParts: TutorParts | null = null
 
-  /** Corrections as their own single-key call — tiny tier and diary mode
-   *  (the full tier reads corrections from the tutor JSON instead). In diary
-   *  mode they go to the UI card and the diary entry only — never into the
-   *  tutor's speech. */
+  /** Corrections for the tiny tier: per-sentence grammar FIX calls + local
+   *  word diff (a 1B model returns the corrected sentence reliably, but
+   *  fragment pairs it does not — see lib/corrections.ts). In diary mode the
+   *  corrections go to the UI card only — never into the tutor's speech. */
   const runCorrections = async (): Promise<void> => {
     const tCorr = nowMs()
     try {
-      const corrCall = await llmEngine.chat(buildCorrectionsMessages(targetLang, uiLang, userText), {
-        temperature: LLM_CORRECTIONS_TEMPERATURE,
-        maxTokens: 160,
-        // the model sometimes continues with another "Example" after the JSON
-        stop: ['Example', '\n\n\n'],
-      })
+      const result = await tinyCorrections({ userText, targetLang })
       timings.corrections_ms = Math.round(nowMs() - tCorr)
-      const corrParsed = parseCorrectionsJson(corrCall.text)
-      keptCorrections = filterCorrections(corrParsed.corrections, userText, uiLang)
+      keptCorrections = filterCorrections(result.corrections, userText, uiLang)
+      const okCalls = result.calls.filter(c => c.fixed !== null).length
       if (tutorOption) {
         recordTurn({
           stage: 'corrections',
           llmKey: tutorOption.key,
           modelId: tutorOption.modelId,
           device: llmEngine.deviceLabel,
-          temperature: LLM_CORRECTIONS_TEMPERATURE,
-          promptTokens: corrCall.perf?.promptTokens ?? null,
-          completionTokens: corrCall.perf?.completionTokens ?? null,
-          ttftMs: corrCall.perf?.ttftMs ?? null,
-          prefillTokS: corrCall.perf?.prefillTokS ?? null,
-          decodeTokS: corrCall.perf?.decodeTokS ?? null,
-          e2eMs: corrCall.perf?.e2eMs ?? null,
+          temperature: 0,
+          promptTokens: null,
+          completionTokens: null,
+          ttftMs: null,
+          prefillTokS: null,
+          decodeTokS: null,
+          e2eMs: null,
           wallMs: timings.corrections_ms,
-          parse: corrParsed.method === 'fail' ? 'fail' : corrParsed.method,
-          correctionsRaw: corrParsed.corrections.length,
+          parse: okCalls === result.calls.length ? 'json' : okCalls > 0 ? 'repaired' : 'fail',
+          correctionsRaw: result.corrections.length,
           correctionsKept: keptCorrections.length,
           turnNo: null,
           schema: 'tiny',

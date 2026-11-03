@@ -8,15 +8,14 @@
 import pkg from '../../package.json'
 import { llmEngine, llmModelByKey, type LoadProgress } from './llm'
 import { parseTutorReply, parseTranslationJson, filterCorrections } from './parse'
+import { tinyCorrections } from './corrections'
 import {
   buildTutorMessages,
   buildTutorMessagesSimple,
-  buildCorrectionsMessages,
   buildTranslateMessages,
   buildVocabMessages,
   type LlmMessage,
 } from '../prompts'
-import { parseCorrectionsJson } from './parse'
 import { contextWindowFor } from './llm'
 import type { Level } from '../types'
 import type { TargetLang } from './langs'
@@ -431,28 +430,26 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
       const parsed = parseTutorReply(tutor.text, targetLang)
       let corrections = parsed.corrections
       if (option.tiny) {
-        // tiny tier: corrections via the separate single-key call
-        const corr = await llmEngine.chat(buildCorrectionsMessages(targetLang, uiLang, step.text), {
-          temperature: 0.2,
-          maxTokens: 400,
-        })
-        const corrParsed = parseCorrectionsJson(corr.text)
-        corrections = corrParsed.corrections
+        // tiny tier: corrections = per-sentence fix calls + local word diff
+        // (the same path production uses — see lib/corrections.ts)
+        const tCorr = performance.now()
+        const corrResult = await tinyCorrections({ userText: step.text, targetLang })
+        corrections = corrResult.corrections
         recordTurn({
           stage: 'corrections',
           llmKey: key,
           modelId: option.modelId,
           device: llmEngine.deviceLabel,
-          temperature: 0.2,
-          promptTokens: corr.perf?.promptTokens ?? null,
-          completionTokens: corr.perf?.completionTokens ?? null,
-          ttftMs: corr.perf?.ttftMs ?? null,
-          prefillTokS: corr.perf?.prefillTokS ?? null,
-          decodeTokS: corr.perf?.decodeTokS ?? null,
-          e2eMs: corr.perf?.e2eMs ?? null,
-          wallMs: null,
-          parse: corrParsed.method === 'fail' ? 'fail' : corrParsed.method,
-          correctionsRaw: corrParsed.corrections.length,
+          temperature: 0,
+          promptTokens: null,
+          completionTokens: null,
+          ttftMs: null,
+          prefillTokS: null,
+          decodeTokS: null,
+          e2eMs: null,
+          wallMs: Math.round(performance.now() - tCorr),
+          parse: corrResult.corrections.length >= 0 ? 'json' : 'fail',
+          correctionsRaw: corrResult.corrections.length,
           correctionsKept: null,
           turnNo: null,
           schema: 'tiny',

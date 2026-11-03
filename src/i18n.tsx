@@ -248,6 +248,8 @@ const RU: Dict = {
   // Design UI (the Figma Make look)
   navConversation: 'Диалог',
   navCards: 'Карточки',
+  navDiary: 'Дневник',
+  diaryMode: 'Режим дневника',
   recentTitle: 'НЕДАВНИЕ ДИАЛОГИ',
   newConversation: 'Новый диалог',
   currentTopicLine: 'Сегодня · В процессе',
@@ -526,6 +528,8 @@ const EN: Dict = {
   // Design UI (the Figma Make look)
   navConversation: 'Conversation',
   navCards: 'Cards',
+  navDiary: 'Diary',
+  diaryMode: 'Diary mode',
   recentTitle: 'RECENT CONVERSATIONS',
   newConversation: 'New conversation',
   currentTopicLine: 'Today · In progress',

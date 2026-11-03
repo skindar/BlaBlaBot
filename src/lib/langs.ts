@@ -210,6 +210,15 @@ export const FAREWELL_RE: Record<TargetLang, RegExp> = {
   pt: /\b(tchau|adeus|até logo|boa noite)\b/i,
 }
 
+/** "The student opens with a greeting" — greet back, then the first question */
+export const GREETING_RE: Record<TargetLang, RegExp> = {
+  de: /^\s*(hallo|hi|hey|moin|servus|guten\s+(tag|morgen|abend))\b/i,
+  en: /^\s*(hi|hello|hey|good\s+(morning|afternoon|evening))\b/i,
+  fr: /^\s*(salut|bonjour|coucou)\b/i,
+  es: /^\s*(hola|buenas|buenos\s+d[ií]as)\b/i,
+  pt: /^\s*(ol[áa]|oi|bom\s+dia|boa\s+(tarde|noite))\b/i,
+}
+
 export const TUTOR_FAREWELL: Record<TargetLang, string> = {
   de: 'Tschüss! Es war schön, mit dir zu sprechen. Bis bald!',
   en: 'Bye! It was great talking to you. See you soon!',

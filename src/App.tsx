@@ -231,6 +231,14 @@ function AppInner() {
       speakingRef.current = true
       setStage('playing')
       setStatusText(t('tutorSpeaking', { name: t('appName') }))
+      // Watchdog: speechSynthesis/AudioBuffer onended events occasionally
+      // never fire (autoplay policy, voice swap mid-utterance) — without this
+      // the stage sticks at 'playing' and silently eats every chip click.
+      const words = text.split(/\s+/).length
+      const watchdog = window.setTimeout(
+        () => cancelSpeech(),
+        Math.max(8000, words * 420 / Math.max(0.5, settings.ttsSpeed) + 4000),
+      )
       speak(text, {
         ...ttsSettings,
         targetLang: lang,
@@ -241,6 +249,7 @@ function AppInner() {
           setError(err instanceof Error ? err.message : t('audioFailed'))
         })
         .finally(() => {
+          window.clearTimeout(watchdog)
           speakingRef.current = false
           setStage(s => (s === 'playing' ? 'idle' : s))
           setStatusText(t('readyToTalk'))
@@ -334,7 +343,10 @@ function AppInner() {
 
   const handleText = useCallback(
     (text: string) => {
-      if (stage !== 'idle') return
+      if (stage === 'recording' || stage === 'processing') return
+      // tapping a chip while the bot is speaking interrupts the speech and
+      // sends — a silent no-op here was swallowing every chip click
+      if (stage === 'playing') cancelSpeech()
       void sendChat({ text })
     },
     [sendChat, stage],

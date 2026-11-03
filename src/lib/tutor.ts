@@ -14,6 +14,7 @@ import {
 } from '../prompts'
 import {
   FAREWELL_RE,
+  GREETING_RE,
   NEGATION_RE,
   TUTOR_FAREWELL,
   TUTOR_FAREWELL_TRANSLATION,
@@ -335,6 +336,24 @@ export async function runTinyTutorTurn(args: TinyTutorArgs): Promise<TutorTurnRe
   const userAsked = TARGET_WH_RE[targetLang].test(userText) || userText.includes('?')
   const turn = currentTurn(scenario, session)
   const wordCount = userText.trim().split(/\s+/).filter(Boolean).length
+
+  // 1.5 Opening: a bare greeting before the first question — greet back
+  //  warmly and ask the scenario's first question. Deterministic: a 1B model
+  //  asked to "react to a greeting" produces non-sequiturs ("das Wochenende
+  //  ist schön!"), the greeting itself is a fixed line.
+  if (session.nextIndex === 0 && (GREETING_RE[targetLang].test(userText) || wordCount < 2)) {
+    const first = scenario.turns[0]
+    const greeting = greetingFor(targetLang)
+    return {
+      move: 'advance',
+      method: 'template',
+      reply: polishReply(`${greeting} ${first.question}`, { maxWords: maxWordsFor(level) + 6 }),
+      suggestions: turnChips(first),
+      session: { ...session, nextIndex: 1, lastQuestion: first.question },
+      question: first.question,
+      parts: { reaction: greeting, fixed: first.question, fixedTr: first.questionTr },
+    }
+  }
 
   // 2. The student asked the tutor something — answer briefly, return the ball
   if (userAsked) {
