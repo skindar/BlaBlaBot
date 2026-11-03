@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { libT } from '../i18n'
+import { recordLoad } from '../lib/bench'
 import { defaultPhononVoice, langInfo, type TargetLang } from '../lib/langs'
 import { asrEngine } from '../lib/asr'
 import { llmEngine, llmModelByKey } from '../lib/llm'
@@ -52,9 +53,11 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
         const base = phononBase || langInfo(targetLang).phononBase
         patch('tts', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
         const t = performance.now()
+        let sawNetwork = false
         try {
           await phononEngine.ensure(targetLang, base, p => {
             if (cancelled) return
+            if (!p.cached) sawNetwork = true
             const frac = p.total ? p.loaded / p.total : 0
             const mb = p.total
               ? `${(p.loaded / 1048576).toFixed(0)}/${(p.total / 1048576).toFixed(0)} ${libT('fileMb')}`
@@ -62,6 +65,12 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
             patch('tts', { progress: frac, progressText: `${p.file} ${mb}${p.cached ? ` ${libT('fileCached')}` : ''}` })
           })
           if (cancelled) return
+          recordLoad({
+            kind: 'tts',
+            model: `phonon-${targetLang}`,
+            ms: Math.round(performance.now() - t),
+            source: sawNetwork ? 'network' : 'cache',
+          })
           patch('tts', {
             state: 'ready',
             load_ms: Math.round(performance.now() - t),
@@ -112,11 +121,20 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
     async function loadAsr() {
       patch('asr', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
       const t = performance.now()
+      let sawNetwork = false
       try {
         await asrEngine.ensure(asrKey, p => {
           if (!cancelled) patch('asr', { progress: p.progress, progressText: p.text })
+          // transformers.js progress texts mention progress% only while downloading
+          if (/%/.test(p.text)) sawNetwork = true
         })
         if (cancelled) return
+        recordLoad({
+          kind: 'asr',
+          model: asrEngine.loadedKey ?? asrKey,
+          ms: Math.round(performance.now() - t),
+          source: sawNetwork ? 'network' : 'cache',
+        })
         patch('asr', {
           state: 'ready',
           load_ms: Math.round(performance.now() - t),
@@ -136,11 +154,20 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
     async function loadLlm() {
       patch('llm', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
       const t = performance.now()
+      let sawNetwork = false
       try {
         await llmEngine.ensure(llmKey, p => {
           if (!cancelled) patch('llm', { progress: p.progress, progressText: p.text })
+          // webllm progress texts contain "Fetching"/percentages only while downloading
+          if (/fetch|%/.test(p.text) && !/cache/i.test(p.text)) sawNetwork = true
         })
         if (cancelled) return
+        recordLoad({
+          kind: 'llm',
+          model: llmModelByKey(llmKey).modelId,
+          ms: Math.round(performance.now() - t),
+          source: sawNetwork ? 'network' : 'cache',
+        })
         setState(prev => ({ ...prev, llmCurrent: llmKey }))
         patch('llm', {
           state: 'ready',

@@ -5,9 +5,10 @@
 
 import { asrEngine, AsrError } from './asr'
 import { decodeBlobToPcm16k, detectSpeech, trimSilence, BadAudioError, EmptyAudioError } from './audio'
+import { recordTurn } from './bench'
 import { libT } from '../i18n'
 import { langInfo, type TargetLang } from './langs'
-import { llmEngine, LlmError } from './llm'
+import { llmEngine, LlmError, llmModelByKey } from './llm'
 import {
   filterCorrections,
   hasCyrillic,
@@ -126,18 +127,39 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   const history = conversation.historyForLlm(targetLang)
   const messages = buildTutorMessages(history, userText, level, targetLang, uiLang, extraPrompt)
   const tLlm = nowMs()
-  let raw: string
+  let tutorCall: Awaited<ReturnType<typeof llmEngine.chat>>
   try {
-    raw = await llmEngine.chat(messages, { temperature: LLM_TEMPERATURE })
+    tutorCall = await llmEngine.chat(messages, { temperature: LLM_TEMPERATURE })
   } catch (err) {
     if (err instanceof LlmError) throw new PipelineError(err.message)
     throw new PipelineError(libT('errLlmFailed', { reason: err instanceof Error ? err.message : String(err) }))
   }
   timings.llm_ms = Math.round(nowMs() - tLlm)
 
-  const parsed = parseTutorReply(raw)
+  const parsed = parseTutorReply(tutorCall.text)
   const keptCorrections: Correction[] = filterCorrections(parsed.corrections, userText)
   const suggestions: Suggestion[] = parsed.suggestions
+  const tutorOption = llmEngine.loadedKey ? llmModelByKey(llmEngine.loadedKey) : null
+  if (tutorOption) {
+    recordTurn({
+      stage: 'tutor',
+      llmKey: tutorOption.key,
+      modelId: tutorOption.modelId,
+      device: llmEngine.deviceLabel,
+      temperature: LLM_TEMPERATURE,
+      promptTokens: tutorCall.perf?.promptTokens ?? null,
+      completionTokens: tutorCall.perf?.completionTokens ?? null,
+      ttftMs: tutorCall.perf?.ttftMs ?? null,
+      prefillTokS: tutorCall.perf?.prefillTokS ?? null,
+      decodeTokS: tutorCall.perf?.decodeTokS ?? null,
+      e2eMs: tutorCall.perf?.e2eMs ?? null,
+      wallMs: timings.llm_ms,
+      parse: parsed.method,
+      correctionsRaw: parsed.corrections.length,
+      correctionsKept: keptCorrections.length,
+      turnNo: Math.floor(history.length / 2) + 1,
+    })
+  }
 
   // ---- LLM: translation (second call, temp 0.2) ----
   let translation = ''
@@ -145,9 +167,8 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   const tTr = nowMs()
   try {
     const trMessages = buildTranslateMessages(targetLang, uiLang, userText, parsed.reply)
-    const rawTr = (
-      await llmEngine.chat(trMessages, { temperature: LLM_TRANSLATION_TEMPERATURE })
-    ).trim()
+    const trCall = await llmEngine.chat(trMessages, { temperature: LLM_TRANSLATION_TEMPERATURE })
+    const rawTr = trCall.text.trim()
     const parsedTr = parseTranslationJson(rawTr)
     if (parsedTr !== null) {
       translation = parsedTr.reply
@@ -161,6 +182,26 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     if (!translationOk(translation, uiLang)) translation = ''
     if (!translationOk(userTranslation, uiLang)) userTranslation = ''
     timings.translation_ms = Math.round(nowMs() - tTr)
+    if (tutorOption) {
+      recordTurn({
+        stage: 'translation',
+        llmKey: tutorOption.key,
+        modelId: tutorOption.modelId,
+        device: llmEngine.deviceLabel,
+        temperature: LLM_TRANSLATION_TEMPERATURE,
+        promptTokens: trCall.perf?.promptTokens ?? null,
+        completionTokens: trCall.perf?.completionTokens ?? null,
+        ttftMs: trCall.perf?.ttftMs ?? null,
+        prefillTokS: trCall.perf?.prefillTokS ?? null,
+        decodeTokS: trCall.perf?.decodeTokS ?? null,
+        e2eMs: trCall.perf?.e2eMs ?? null,
+        wallMs: timings.translation_ms,
+        parse: parsedTr !== null ? 'json' : translation ? 'fallback' : 'fail',
+        correctionsRaw: null,
+        correctionsKept: null,
+        turnNo: Math.floor(history.length / 2) + 1,
+      })
+    }
   } catch (err) {
     // Translation failed — take the tutor reply's own translation field if present
     translation = parsed.translation || translation
@@ -193,6 +234,28 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   conversation.addTutor(targetLang, parsed.reply, keptCorrections, translation, parsed.follow_up)
 
   timings.total_ms = Math.round(nowMs() - tTotal)
+
+  // Full round-trip record: all stage timings in one row for the benchmark
+  if (tutorOption) {
+    recordTurn({
+      stage: 'turn',
+      llmKey: tutorOption.key,
+      modelId: tutorOption.modelId,
+      device: llmEngine.deviceLabel,
+      temperature: LLM_TEMPERATURE,
+      promptTokens: null,
+      completionTokens: null,
+      ttftMs: null,
+      prefillTokS: null,
+      decodeTokS: null,
+      e2eMs: null,
+      wallMs: timings.total_ms,
+      parse: null,
+      correctionsRaw: null,
+      correctionsKept: null,
+      turnNo: Math.floor(history.length / 2) + 1,
+    })
+  }
 
   return {
     user_text: userText,
@@ -230,17 +293,36 @@ export async function processVocab(
     throw new InvalidParameterError(libT('errVocabEmpty'))
   }
   const messages = buildVocabMessages(targetLang, uiLang, cleaned)
-  let raw: string
+  let vocabCall: Awaited<ReturnType<typeof llmEngine.chat>>
   try {
-    raw = await llmEngine.chat(messages, { temperature: LLM_VOCAB_TEMPERATURE })
+    vocabCall = await llmEngine.chat(messages, { temperature: LLM_VOCAB_TEMPERATURE })
   } catch (err) {
     if (err instanceof LlmError) throw new PipelineError(err.message)
     throw new PipelineError(libT('errLlmFailed', { reason: err instanceof Error ? err.message : String(err) }))
   }
-  const data = parseVocabJson(raw)
+  const data = parseVocabJson(vocabCall.text)
   if (data === null) {
     throw new PipelineError(libT('errVocabFailed'))
   }
+  const vocabOption = llmModelByKey(llmKey)
+  recordTurn({
+    stage: 'vocab',
+    llmKey,
+    modelId: vocabOption.modelId,
+    device: llmEngine.deviceLabel,
+    temperature: LLM_VOCAB_TEMPERATURE,
+    promptTokens: vocabCall.perf?.promptTokens ?? null,
+    completionTokens: vocabCall.perf?.completionTokens ?? null,
+    ttftMs: vocabCall.perf?.ttftMs ?? null,
+    prefillTokS: vocabCall.perf?.prefillTokS ?? null,
+    decodeTokS: vocabCall.perf?.decodeTokS ?? null,
+    e2eMs: vocabCall.perf?.e2eMs ?? null,
+    wallMs: null,
+    parse: 'json',
+    correctionsRaw: null,
+    correctionsKept: null,
+    turnNo: null,
+  })
   if (!data.exists) {
     const comment = data.comment || vocabNotRealDefaultComment()
     throw new InvalidParameterError(

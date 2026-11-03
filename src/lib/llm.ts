@@ -54,6 +54,21 @@ export interface LoadProgress {
   text: string
 }
 
+/** WebLLM perf data (usage + usage.extra) — the benchmark's raw material */
+export interface LlmPerf {
+  promptTokens: number | null
+  completionTokens: number | null
+  ttftMs: number | null
+  prefillTokS: number | null
+  decodeTokS: number | null
+  e2eMs: number | null
+}
+
+export interface ChatResult {
+  text: string
+  perf: LlmPerf | null
+}
+
 export class LlmError extends Error {}
 export class LlmNotSupportedError extends LlmError {}
 
@@ -72,6 +87,11 @@ export class LlmEngine {
 
   get busy(): boolean {
     return this.loading
+  }
+
+  /** Where inference runs — WebLLM is WebGPU-only; used by the bench records */
+  get deviceLabel(): string {
+    return LlmEngine.supported() ? 'WebGPU' : 'none'
   }
 
   static supported(): boolean {
@@ -118,11 +138,12 @@ export class LlmEngine {
   /**
    * One chat call. For Qwen3, thinking is disabled (enable_thinking: false);
    * the parser strips <think> blocks anyway in case the model still emits them.
+   * Returns the text plus WebLLM's perf numbers (TTFT, prefill/decode tok/s).
    */
   async chat(
     messages: LlmMessage[],
     opts: { temperature?: number; maxTokens?: number } = {},
-  ): Promise<string> {
+  ): Promise<ChatResult> {
     if (this.engine === null || this.currentKey === null) {
       throw new LlmError('LLM ещё не загружена')
     }
@@ -147,7 +168,19 @@ export class LlmEngine {
       body as unknown as webllm.ChatCompletionRequestNonStreaming,
     )
     const choice = response.choices[0]
-    return choice?.message?.content ?? ''
+    const usage = response.usage
+    let perf: LlmPerf | null = null
+    if (usage) {
+      perf = {
+        promptTokens: usage.prompt_tokens ?? null,
+        completionTokens: usage.completion_tokens ?? null,
+        ttftMs: usage.extra?.time_to_first_token_s != null ? usage.extra.time_to_first_token_s * 1000 : null,
+        prefillTokS: usage.extra?.prefill_tokens_per_s ?? null,
+        decodeTokS: usage.extra?.decode_tokens_per_s ?? null,
+        e2eMs: usage.extra?.e2e_latency_s != null ? usage.extra.e2e_latency_s * 1000 : null,
+      }
+    }
+    return { text: choice?.message?.content ?? '', perf }
   }
 }
 

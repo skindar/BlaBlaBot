@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BenchView } from './components/BenchView'
 import { FlashcardsView } from './components/FlashcardsView'
 import { MessageList } from './components/MessageList'
 import { OnboardingModal } from './components/OnboardingModal'
@@ -97,7 +98,7 @@ function AppInner() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [timings, setTimings] = useState<Record<string, number> | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'chat' | 'cards'>('chat')
+  const [tab, setTab] = useState<'chat' | 'cards' | 'bench'>('chat')
   const [selection, setSelection] = useState<{ word: string; x: number; y: number } | null>(null)
   const [vocabToast, setVocabToast] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -381,6 +382,9 @@ function AppInner() {
           <button type="button" className={`tab${tab === 'cards' ? ' active' : ''}`} onClick={() => setTab('cards')}>
             {t('tabCards')}
           </button>
+          <button type="button" className={`tab${tab === 'bench' ? ' active' : ''}`} onClick={() => setTab('bench')}>
+            {t('tabBench')}
+          </button>
           <button
             type="button"
             className="tab-btn-icon"
@@ -430,7 +434,7 @@ function AppInner() {
               {recorder.error && <p className="recorder-error">{recorder.error}</p>}
             </div>
           </>
-        ) : (
+        ) : tab === 'cards' ? (
           <FlashcardsView
             active={tab === 'cards'}
             speakWord={speakWord}
@@ -438,6 +442,8 @@ function AppInner() {
             targetLang={lang}
             uiLang={settings.uiLang}
           />
+        ) : (
+          <BenchView active={tab === 'bench'} targetLang={lang} uiLang={settings.uiLang} />
         )}
         {selection && (
           <button

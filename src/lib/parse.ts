@@ -5,6 +5,9 @@
 
 import type { Correction, Suggestion } from '../types'
 
+/** How a tutor reply was extracted — the benchmark's JSON-reliability metric */
+export type ParseMethod = 'json' | 'repaired' | 'regex' | 'plain'
+
 export interface TutorReply {
   reply: string
   corrections: Correction[]
@@ -12,6 +15,7 @@ export interface TutorReply {
   follow_up: string
   follow_up_translation: string
   suggestions: Suggestion[]
+  method: ParseMethod
 }
 
 const THINK_RE = /<think>[\s\S]*?<\/think>/g
@@ -94,7 +98,7 @@ function unescapeQuoted(s: string): string | null {
   }
 }
 
-function replyFromDict(data: Record<string, unknown>): TutorReply | null {
+function replyFromDict(data: Record<string, unknown>): Omit<TutorReply, 'method'> | null {
   const replyRaw = data.reply ?? data.response ?? ''
   if (typeof replyRaw !== 'string' || !replyRaw.trim()) return null
   const corrections: Correction[] = []
@@ -155,7 +159,7 @@ const CORRECTION_RE =
 const SUGGESTION_RE = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"translation"\s*:\s*"((?:[^"\\]|\\.)*)"/g
 
 /** Port of _regex_fallback: extract fields with regexes when JSON did not parse */
-function regexFallback(cleaned: string): TutorReply | null {
+function regexFallback(cleaned: string): Omit<TutorReply, 'method'> | null {
   const replyM = /"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(cleaned)
   if (!replyM) return null
   const reply = unescapeQuoted(replyM[1])
@@ -191,25 +195,30 @@ function regexFallback(cleaned: string): TutorReply | null {
   }
 }
 
-/** Port of parse_tutor_reply */
+/** Port of parse_tutor_reply. `method` records how the reply was extracted —
+ *  the benchmark's JSON-reliability metric for small models. */
 export function parseTutorReply(raw: string): TutorReply {
   const cleaned = cleanRaw(raw)
   for (const candidate of jsonCandidates(cleaned)) {
-    for (const attempt of [candidate, repairJson(candidate)]) {
+    const attempts: Array<{ text: string; method: 'json' | 'repaired' }> = [
+      { text: candidate, method: 'json' },
+      { text: repairJson(candidate), method: 'repaired' },
+    ]
+    for (const attempt of attempts) {
       let data: unknown
       try {
-        data = JSON.parse(attempt)
+        data = JSON.parse(attempt.text)
       } catch {
         continue
       }
       if (typeof data === 'object' && data !== null) {
         const reply = replyFromDict(data as Record<string, unknown>)
-        if (reply !== null) return reply
+        if (reply !== null) return { ...reply, method: attempt.method }
       }
     }
   }
   const rescued = regexFallback(cleaned)
-  if (rescued !== null) return rescued
+  if (rescued !== null) return { ...rescued, method: 'regex' }
   const text = cleaned.trim() || 'Entschuldigung, das habe ich nicht verstanden.'
   return {
     reply: text,
@@ -218,6 +227,7 @@ export function parseTutorReply(raw: string): TutorReply {
     follow_up: '',
     follow_up_translation: '',
     suggestions: [],
+    method: 'plain',
   }
 }
 
