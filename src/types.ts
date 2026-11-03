@@ -86,6 +86,14 @@ export interface Settings {
   handsFree?: boolean
   /** show the Bench tab (hidden by default — a developer/article tool) */
   showBench?: boolean
+  /** which brain writes the tutor lines: in-tab WebLLM or a cloud API */
+  brain?: 'local' | 'cloud'
+  /** OpenAI-compatible endpoint for the cloud brain (Custom URL) */
+  cloudBaseUrl?: string
+  /** API token for the cloud brain — stays in this browser, goes only to the endpoint */
+  cloudApiKey?: string
+  /** model id at the endpoint, e.g. glm-4-flash */
+  cloudModel?: string
 }
 
 export interface VocabItem {

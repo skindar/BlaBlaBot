@@ -208,6 +208,21 @@ const RU: Dict = {
   fileCached: '(кеш)',
   fileMb: 'МБ',
 
+  // Cloud brain (Custom URL)
+  brain: 'Мозг',
+  brainLocal: 'Локально (WebLLM, приватно, офлайн)',
+  brainCloud: 'Облако (API-токен, быстрее и умнее)',
+  brainHint: 'В облаке текст реплик уходит на API-сервер; аудио остаётся локальным',
+  cloudBaseUrl: 'Base URL (OpenAI-совместимый)',
+  cloudModel: 'Модель',
+  cloudApiKey: 'API-токен',
+  cloudPrivacyNote: 'Токен хранится в этом браузере и отправляется только на указанный URL. Пример GLM: https://open.bigmodel.cn/api/paas/v4 + glm-4-flash',
+  errCloud401: 'Токен не принят (401) — проверь API-токен в настройках',
+  errCloudFetch: 'API не отвечает из браузера (CORS или сеть). Попробуй OpenRouter — он разрешает запросы из браузера',
+  errCloudHttp: 'API вернул ошибку {status}: {detail}',
+  errCloudNotConfigured: 'Заполни Base URL, токен и модель в настройках облака',
+
+
   // Bench tab
   tabBench: 'Bench',
   showBenchTab: 'Показывать вкладку Bench',
@@ -487,6 +502,21 @@ const EN: Dict = {
   fileMs: 'ms',
   fileCached: '(cached)',
   fileMb: 'MB',
+
+  // Cloud brain (Custom URL)
+  brain: 'Brain',
+  brainLocal: 'Local (WebLLM, private, offline)',
+  brainCloud: 'Cloud (API token, faster & smarter)',
+  brainHint: 'In cloud mode the reply text goes to the API server; audio stays local',
+  cloudBaseUrl: 'Base URL (OpenAI-compatible)',
+  cloudModel: 'Model',
+  cloudApiKey: 'API token',
+  cloudPrivacyNote: 'The token stays in this browser and is sent only to the URL above. GLM example: https://open.bigmodel.cn/api/paas/v4 + glm-4-flash',
+  errCloud401: 'Token rejected (401) — check the API token in Settings',
+  errCloudFetch: 'The API is unreachable from the browser (CORS or network). Try OpenRouter — it allows browser requests',
+  errCloudHttp: 'API returned an error {status}: {detail}',
+  errCloudNotConfigured: 'Fill in Base URL, token and model in the cloud settings',
+
 
   // Bench tab
   tabBench: 'Bench',

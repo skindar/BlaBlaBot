@@ -28,9 +28,12 @@ export interface UseEngineArgs {
   ttsKind: TtsEngineKind
   ttsVoice: string
   phononBase: string
+  /** cloud brain: the local WebLLM model is not loaded at all */
+  cloudBrain?: boolean
+  cloudModel?: string
 }
 
-export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phononBase }: UseEngineArgs): WebHealth {
+export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phononBase, cloudBrain, cloudModel }: UseEngineArgs): WebHealth {
   const [state, setState] = useState<EngineState>(() => ({
     models: { asr: { ...IDLE }, llm: { ...IDLE }, tts: { ...IDLE } },
     llmCurrent: null,
@@ -152,6 +155,17 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
     }
 
     async function loadLlm() {
+      if (cloudBrain) {
+        // cloud brain: nothing to download — the tutor writes via the API
+        setState(prev => ({ ...prev, llmCurrent: 'cloud' }))
+        patch('llm', {
+          state: 'ready',
+          load_ms: 0,
+          progress: 1,
+          progressText: `Cloud · ${cloudModel || 'custom'}`,
+        })
+        return
+      }
       patch('llm', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
       const t = performance.now()
       let sawNetwork = false
@@ -196,7 +210,7 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
     return () => {
       cancelled = true
     }
-  }, [targetLang, llmKey, asrKey, ttsKind, ttsVoice, phononBase, patch])
+  }, [targetLang, llmKey, asrKey, ttsKind, ttsVoice, phononBase, cloudBrain, cloudModel, patch])
 
   const llmReady = state.models.llm.state === 'ready'
   const asrReady = state.models.asr.state === 'ready'

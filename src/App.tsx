@@ -27,6 +27,7 @@ import { conversation, onboarding } from './lib/store'
 import { getSyncStatus, subscribeSync } from './lib/sync'
 import { configureSync, initSyncEvents } from './lib/sync'
 import { I18nProvider, makeT, setLibLang, type UiLang } from './i18n'
+import { setBrain } from './lib/brain'
 import { BotMark, Icon, SageButton } from './ui/design'
 import type { TargetLang } from './lib/langs'
 import type { ChatMessage, ChatResponse, Settings, Stage } from './types'
@@ -135,6 +136,19 @@ function AppInner() {
 
   const [statusText, setStatusText] = useState(() => makeT(settings.uiLang)('loadingModels'))
 
+  // Brain routing: cloud (Custom URL) or the local WebLLM engine
+  const cloudBrain = settings.brain === 'cloud'
+  useEffect(() => {
+    setBrain({
+      kind: cloudBrain ? 'cloud' : 'local',
+      cloud: {
+        baseUrl: settings.cloudBaseUrl ?? '',
+        apiKey: settings.cloudApiKey ?? '',
+        model: settings.cloudModel ?? '',
+      },
+    })
+  }, [cloudBrain, settings.cloudBaseUrl, settings.cloudApiKey, settings.cloudModel])
+
   const health = useEngine({
     targetLang: lang,
     llmKey: settings.llmModel,
@@ -142,6 +156,8 @@ function AppInner() {
     ttsKind: settings.ttsEngine,
     ttsVoice: resolveVoice(settings, lang),
     phononBase: resolvePhononBase(settings, lang),
+    cloudBrain,
+    cloudModel: settings.cloudModel ?? '',
   })
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {

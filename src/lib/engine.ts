@@ -39,6 +39,7 @@ import {
 } from '../prompts'
 import { INTRO_RE, NAME_QUESTION_RE } from './langs'
 import { tinyCorrections } from './corrections'
+import { brainInUse, getBrain, chatBrain } from './brain'
 import { contextWindowFor } from './llm'
 import { conversation, diary, lookupDictionary, tutorSession, vocab } from './store'
 import { ttsEngine } from './tts'
@@ -63,6 +64,12 @@ import type { UiLang } from '../i18n'
 export class PipelineError extends Error {}
 export class ModelsNotReadyError extends PipelineError {}
 export class InvalidParameterError extends PipelineError {}
+
+/** Where inference currently runs — cloud brain or the local WebGPU engine */
+function deviceNow(): string {
+  if (brainInUse() === 'cloud') return `Cloud · ${getBrain().cloud.model || 'cloud-model'}`
+  return llmEngine.deviceLabel
+}
 
 const LLM_TEMPERATURE = 0.7
 const LLM_TRANSLATION_TEMPERATURE = 0.2
@@ -346,7 +353,7 @@ function cleanSuggestions(raw: Suggestion[], uiLang: UiLang, targetLang: TargetL
 /** Diary auto-refine: clean ONE phrase for the refined view — bare-text
  *  contract for tiny models; a failed or drifting refine keeps the raw line. */
 async function refineDiaryPhrase(text: string, level: Level, targetLang: TargetLang): Promise<string> {
-  const call = await llmEngine.chat(buildDiaryPhraseRefineMessages(level, targetLang, text), {
+  const call = await chatBrain(buildDiaryPhraseRefineMessages(level, targetLang, text), {
     temperature: 0.3,
     maxTokens: 120,
   })
@@ -363,12 +370,18 @@ export function processChat(args: ProcessChatArgs): Promise<ChatResponse> {
 async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   const { level, llmKey, targetLang, uiLang, blob, extraPrompt = '' } = args
 
-  if (llmEngine.loadedKey === null || asrEngine.loadedKey === null) {
+  const cloudBrain = brainInUse() === 'cloud'
+  if (asrEngine.loadedKey === null) {
     throw new ModelsNotReadyError(libT('errModelsNotReady'))
   }
-  if (llmEngine.loadedKey !== llmKey) {
-    // The model was switched but not reloaded yet — like the native 503
-    throw new ModelsNotReadyError(libT('errModelSwitching'))
+  if (!cloudBrain) {
+    if (llmEngine.loadedKey === null) {
+      throw new ModelsNotReadyError(libT('errModelsNotReady'))
+    }
+    if (llmEngine.loadedKey !== llmKey) {
+      // The model was switched but not reloaded yet — like the native 503
+      throw new ModelsNotReadyError(libT('errModelSwitching'))
+    }
   }
 
   const timings: Record<string, number> = {}
@@ -415,7 +428,11 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   //  A fresh dialog starts a fresh session; a changed sidebar topic re-selects.
   //  Diary mode replaces the scenario with a supportive listener. ----
   const history = conversation.historyForLlm(targetLang, 50)
-  const tutorOption = llmEngine.loadedKey ? llmModelByKey(llmEngine.loadedKey) : null
+  const tutorOption = cloudBrain
+    ? { key: 'cloud', modelId: getBrain().cloud.model || 'cloud-model', label: 'Cloud', size: '', tiny: false }
+    : llmEngine.loadedKey
+      ? llmModelByKey(llmEngine.loadedKey)
+      : null
   const tiny = Boolean(tutorOption?.tiny)
   const diaryMode = Boolean(args.diaryMode)
   const activeScenario = selectScenario(targetLang, level, extraPrompt)
@@ -453,7 +470,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
           stage: 'corrections',
           llmKey: tutorOption.key,
           modelId: tutorOption.modelId,
-          device: llmEngine.deviceLabel,
+          device: deviceNow(),
           temperature: 0,
           promptTokens: null,
           completionTokens: null,
@@ -503,7 +520,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
         stage: 'tutor',
         llmKey: tutorOption.key,
         modelId: tutorOption.modelId,
-        device: llmEngine.deviceLabel,
+        device: deviceNow(),
         temperature: 0.4,
         promptTokens: null,
         completionTokens: null,
@@ -546,7 +563,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
         stage: 'tutor',
         llmKey: tutorOption.key,
         modelId: tutorOption.modelId,
-        device: llmEngine.deviceLabel,
+        device: deviceNow(),
         temperature: LLM_TEMPERATURE,
         promptTokens: null,
         completionTokens: null,
@@ -594,9 +611,9 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       : { messages: builtMessages, trimmedPairs: 0 }
     const messages = trimmed.messages
     const tLlm = nowMs()
-    let tutorCall: Awaited<ReturnType<typeof llmEngine.chat>>
+    let tutorCall: Awaited<ReturnType<typeof chatBrain>>
     try {
-      tutorCall = await llmEngine.chat(messages, { temperature: LLM_TEMPERATURE })
+      tutorCall = await chatBrain(messages, { temperature: LLM_TEMPERATURE })
     } catch (err) {
       if (err instanceof LlmError) throw new PipelineError(err.message)
       throw new PipelineError(libT('errLlmFailed', { reason: err instanceof Error ? err.message : String(err) }))
@@ -619,7 +636,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
         ? trimHistoryToFit(retryBuilt, tutorOption.modelId, tutorOption.key)
         : { messages: retryBuilt, trimmedPairs: 0 }
       try {
-        const retryCall = await llmEngine.chat(retryTrimmed.messages, { temperature: LLM_TEMPERATURE })
+        const retryCall = await chatBrain(retryTrimmed.messages, { temperature: LLM_TEMPERATURE })
         if (!looksEnglish(parseTutorReply(retryCall.text, targetLang).reply)) tutorCall = retryCall
       } catch {
         /* keep the first reply — it is better than nothing */
@@ -656,7 +673,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
         stage: 'tutor',
         llmKey: tutorOption.key,
         modelId: tutorOption.modelId,
-        device: llmEngine.deviceLabel,
+        device: deviceNow(),
         temperature: LLM_TEMPERATURE,
         promptTokens: tutorCall.perf?.promptTokens ?? null,
         completionTokens: tutorCall.perf?.completionTokens ?? null,
@@ -679,7 +696,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   if (suggestions.length === 0 && tutorOption && !tiny) {
     const tSugg = nowMs()
     try {
-      const suggCall = await llmEngine.chat(buildSuggestionsMessages(level, targetLang, reply), {
+      const suggCall = await chatBrain(buildSuggestionsMessages(level, targetLang, reply), {
         temperature: LLM_SUGGESTIONS_TEMPERATURE,
         maxTokens: 200,
       })
@@ -690,7 +707,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
         stage: 'suggestions',
         llmKey: tutorOption.key,
         modelId: tutorOption.modelId,
-        device: llmEngine.deviceLabel,
+        device: deviceNow(),
         temperature: LLM_SUGGESTIONS_TEMPERATURE,
         promptTokens: suggCall.perf?.promptTokens ?? null,
         completionTokens: suggCall.perf?.completionTokens ?? null,
@@ -742,7 +759,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     /** Single-text translation without a JSON contract: a bare line is
      *  what tiny models reliably produce; JSON is where they fail */
     const translateOne = async (text: string, strictPrompt = false) => {
-      const call = await llmEngine.chat(buildSingleTranslateMessages(targetLang, uiLang, text, strictPrompt), {
+      const call = await chatBrain(buildSingleTranslateMessages(targetLang, uiLang, text, strictPrompt), {
         temperature: LLM_TRANSLATION_TEMPERATURE,
         // a translation is one short line; a derailing model must not buy
         // itself 900 tokens of repetition
@@ -777,7 +794,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       // scenario data — the 1B model only translates the short reaction.
       // The short farewell maps to a greeting if translated ("Tschüss!" ->
       // "Здравствуйте!"), so it is glossary-only.
-      let replyCall: Awaited<ReturnType<typeof llmEngine.chat>> | null = null
+      let replyCall: Awaited<ReturnType<typeof chatBrain>> | null = null
       if (tutorParts && tutorParts.reaction) {
         const fixed = tutorParts.fixedTr[uiLang]
         const done = await translateOneValidated(tutorParts.reaction)
@@ -810,7 +827,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
           stage: 'translation',
           llmKey: tutorOption.key,
           modelId: tutorOption.modelId,
-          device: llmEngine.deviceLabel,
+          device: deviceNow(),
           temperature: LLM_TRANSLATION_TEMPERATURE,
           promptTokens: replyCall?.perf?.promptTokens ?? null,
           completionTokens: replyCall?.perf?.completionTokens ?? null,
@@ -829,7 +846,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       // Full tier: one combined JSON call for both lines + one strict retry
       const translateOnce = async (strict: boolean) => {
         const trMessages = buildTranslateMessages(targetLang, uiLang, userText, reply, strict)
-        const trCall = await llmEngine.chat(trMessages, { temperature: LLM_TRANSLATION_TEMPERATURE })
+        const trCall = await chatBrain(trMessages, { temperature: LLM_TRANSLATION_TEMPERATURE })
         const rawTr = trCall.text.trim()
         const parsedTr = parseTranslationJson(rawTr)
         if (parsedTr !== null) return { user: parsedTr.user, reply: parsedTr.reply, json: true, call: trCall }
@@ -878,7 +895,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
           stage: 'translation',
           llmKey: tutorOption.key,
           modelId: tutorOption.modelId,
-          device: llmEngine.deviceLabel,
+          device: deviceNow(),
           temperature: LLM_TRANSLATION_TEMPERATURE,
           promptTokens: first.call.perf?.promptTokens ?? null,
           completionTokens: first.call.perf?.completionTokens ?? null,
@@ -957,7 +974,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       stage: 'turn',
       llmKey: tutorOption.key,
       modelId: tutorOption.modelId,
-      device: llmEngine.deviceLabel,
+      device: deviceNow(),
       temperature: LLM_TEMPERATURE,
       promptTokens: null,
       completionTokens: null,
@@ -1007,14 +1024,14 @@ export async function processDiaryRefine(args: {
   llmKey: string
 }): Promise<DiaryRefineResult> {
   const { level, targetLang, uiLang, llmKey } = args
-  if (llmEngine.loadedKey === null || llmEngine.loadedKey !== llmKey) {
+  if (brainInUse() !== 'cloud' && (llmEngine.loadedKey === null || llmEngine.loadedKey !== llmKey)) {
     throw new ModelsNotReadyError(libT('errModelsNotReady'))
   }
   const lines = args.lines.map(l => l.trim()).filter(Boolean)
   if (lines.length === 0) throw new InvalidParameterError(libT('errNeedInput'))
 
   const refineOnce = async (languageRetry: boolean): Promise<string> => {
-    const call = await llmEngine.chat(buildDiaryRefineMessages(level, targetLang, lines, languageRetry), {
+    const call = await chatBrain(buildDiaryRefineMessages(level, targetLang, lines, languageRetry), {
       temperature: 0.5,
     })
     const text = stripQuoteWrappers(stripThink(call.text.trim()))
@@ -1031,7 +1048,7 @@ export async function processDiaryRefine(args: {
   // translation for comfortable re-reading — best effort, never fails the page
   let translation = ''
   try {
-    const trCall = await llmEngine.chat(buildSingleTranslateMessages(targetLang, uiLang, text), {
+    const trCall = await chatBrain(buildSingleTranslateMessages(targetLang, uiLang, text), {
       temperature: LLM_TRANSLATION_TEMPERATURE,
     })
     const candidate = parseSingleTranslation(trCall.text)
@@ -1057,7 +1074,7 @@ export async function processVocab(
   targetLang: TargetLang,
   uiLang: UiLang = 'ru',
 ): Promise<VocabResult> {
-  if (llmEngine.loadedKey === null || llmEngine.loadedKey !== llmKey) {
+  if (brainInUse() !== 'cloud' && (llmEngine.loadedKey === null || llmEngine.loadedKey !== llmKey)) {
     throw new ModelsNotReadyError(libT('errModelsNotReady'))
   }
   const cleaned = word.split(/\s+/).filter(Boolean).join(' ')
@@ -1065,9 +1082,9 @@ export async function processVocab(
     throw new InvalidParameterError(libT('errVocabEmpty'))
   }
   const messages = buildVocabMessages(targetLang, uiLang, cleaned)
-  let vocabCall: Awaited<ReturnType<typeof llmEngine.chat>>
+  let vocabCall: Awaited<ReturnType<typeof chatBrain>>
   try {
-    vocabCall = await llmEngine.chat(messages, { temperature: LLM_VOCAB_TEMPERATURE })
+    vocabCall = await chatBrain(messages, { temperature: LLM_VOCAB_TEMPERATURE })
   } catch (err) {
     if (err instanceof LlmError) throw new PipelineError(err.message)
     throw new PipelineError(libT('errLlmFailed', { reason: err instanceof Error ? err.message : String(err) }))
@@ -1081,7 +1098,7 @@ export async function processVocab(
     stage: 'vocab',
     llmKey,
     modelId: vocabOption.modelId,
-    device: llmEngine.deviceLabel,
+    device: deviceNow(),
     temperature: LLM_VOCAB_TEMPERATURE,
     promptTokens: vocabCall.perf?.promptTokens ?? null,
     completionTokens: vocabCall.perf?.completionTokens ?? null,

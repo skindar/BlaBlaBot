@@ -7,7 +7,7 @@
 // The user's message is split into sentences and each is checked with its
 // own short call — single-sentence context is where small models are exact.
 
-import { llmEngine } from './llm'
+import { chatBrain } from './brain'
 import { buildSentenceFixMessages } from '../prompts'
 import type { Correction } from '../types'
 import type { TargetLang } from './langs'
@@ -127,7 +127,7 @@ export async function tinyCorrections(args: {
     let raw = ''
     let perf: SentenceFixCall['perf'] = null
     try {
-      const call = await llmEngine.chat(buildSentenceFixMessages(args.targetLang, sentence), {
+      const call = await chatBrain(buildSentenceFixMessages(args.targetLang, sentence), {
         temperature: 0,
         maxTokens: 120,
         stop: ['\n'],

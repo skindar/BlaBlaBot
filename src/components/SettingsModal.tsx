@@ -329,6 +329,19 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
           <h3 className={sectionTitle}>{t('sectionModels')}</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-brain">{t('brain')}</label>
+              <select
+                className={inputCls}
+                id="set-brain"
+                onChange={e => onChange({ brain: e.target.value as Settings['brain'] })}
+                value={settings.brain ?? 'local'}
+              >
+                <option value="local">{t('brainLocal')}</option>
+                <option value="cloud">{t('brainCloud')}</option>
+              </select>
+              <p className="text-[11px] leading-relaxed text-[#94988f]">{t('brainHint')}</p>
+            </div>
+            <div className={rowCls}>
               <label className={labelCls} htmlFor="set-llm">{t('llmModel')}</label>
               <select
                 className={inputCls}
@@ -364,6 +377,45 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               {settings.asrModel !== DEFAULT_ASR_KEY && <p className="hint-note" />}
             </div>
           </div>
+          {(settings.brain ?? 'local') === 'cloud' && (
+            <div className="mt-4 grid gap-4 border-t border-[#e5e6de] pt-4 sm:grid-cols-2">
+              <div className={rowCls}>
+                <label className={labelCls} htmlFor="set-cloud-base">{t('cloudBaseUrl')}</label>
+                <input
+                  className={inputCls}
+                  id="set-cloud-base"
+                  onChange={e => onChange({ cloudBaseUrl: e.target.value })}
+                  placeholder="https://open.bigmodel.cn/api/paas/v4"
+                  type="text"
+                  value={settings.cloudBaseUrl ?? ''}
+                />
+              </div>
+              <div className={rowCls}>
+                <label className={labelCls} htmlFor="set-cloud-model">{t('cloudModel')}</label>
+                <input
+                  className={inputCls}
+                  id="set-cloud-model"
+                  onChange={e => onChange({ cloudModel: e.target.value })}
+                  placeholder="glm-4-flash"
+                  type="text"
+                  value={settings.cloudModel ?? ''}
+                />
+              </div>
+              <div className={rowCls}>
+                <label className={labelCls} htmlFor="set-cloud-key">{t('cloudApiKey')}</label>
+                <input
+                  autoComplete="off"
+                  className={inputCls}
+                  id="set-cloud-key"
+                  onChange={e => onChange({ cloudApiKey: e.target.value })}
+                  placeholder="●●●●●●●●"
+                  type="password"
+                  value={settings.cloudApiKey ?? ''}
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-[#94988f]">{t('cloudPrivacyNote')}</p>
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#737970]">
             {(['asr', 'llm', 'tts'] as const).map(kind => {
               const m = health?.models[kind]

@@ -4,7 +4,7 @@
 // a curated template as the quality floor. The model can upgrade the
 // reaction, never break the lesson.
 
-import { llmEngine } from './llm'
+import { chatBrain } from './brain'
 import { contentStems, hasCyrillic, stripQuoteWrappers, stripThink } from './parse'
 import {
   buildDiaryReactionMessages,
@@ -236,7 +236,7 @@ async function chatOnce(
 ): Promise<string> {
   // one line out → stop at the first newline: without it the 1B model keeps
   // writing the next few-shot example all the way to max_tokens
-  const call = await llmEngine.chat(messages, { temperature, maxTokens, stop: ['\n'] })
+  const call = await chatBrain(messages, { temperature, maxTokens, stop: ['\n'] })
   return call.text
 }
 

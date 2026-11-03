@@ -6,6 +6,7 @@
 // so numbers reflect the real workload, not a synthetic chat bench.
 
 import pkg from '../../package.json'
+import { chatBrain } from './brain'
 import { llmEngine, llmModelByKey, type LoadProgress } from './llm'
 import { parseTutorReply, parseTranslationJson, filterCorrections } from './parse'
 import { tinyCorrections } from './corrections'
@@ -425,7 +426,7 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
         ? buildTutorMessagesSimple(history, step.text, step.level, targetLang, uiLang, '')
         : buildTutorMessages(history, step.text, step.level, targetLang, uiLang, '')
       const t0 = performance.now()
-      const tutor = await llmEngine.chat(messages, { temperature: 0 })
+      const tutor = await chatBrain(messages, { temperature: 0 })
       const wallTutor = Math.round(performance.now() - t0)
       const parsed = parseTutorReply(tutor.text, targetLang)
       let corrections = parsed.corrections
@@ -478,7 +479,7 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
       // ---- translation call (production pattern: second call, temp 0.2) ----
       const trMessages = buildTranslateMessages(targetLang, uiLang, step.text, parsed.reply)
       const t1 = performance.now()
-      const tr = await llmEngine.chat(trMessages, { temperature: 0.2 })
+      const tr = await chatBrain(trMessages, { temperature: 0.2 })
       const wallTr = Math.round(performance.now() - t1)
       const parsedTr = parseTranslationJson(tr.text)
       recordTurn({
@@ -511,7 +512,7 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
       onProgress({ phase: 'vocab', modelKey: key, modelIndex: mi, modelCount: modelKeys.length, turnIndex: 0, turnCount: BENCH_VOCAB.length, text: word })
       const messages = buildVocabMessages(targetLang, uiLang, word)
       const t2 = performance.now()
-      const vocabCall = await llmEngine.chat(messages, { temperature: 0.3 })
+      const vocabCall = await chatBrain(messages, { temperature: 0.3 })
       const wallVocab = Math.round(performance.now() - t2)
       recordTurn({
         stage: 'vocab',
@@ -602,7 +603,7 @@ export async function runContextProbe(opts: {
       : buildTutorMessages(history, line, 'A2', targetLang, uiLang, '')
     const t0 = performance.now()
     try {
-      const call = await llmEngine.chat(messages, { temperature: 0, maxTokens: 250 })
+      const call = await chatBrain(messages, { temperature: 0, maxTokens: 250 })
       const row = {
         turn,
         promptTokens: call.perf?.promptTokens ?? null,
