@@ -1,0 +1,10 @@
+node_modules/
+dist/
+# Phonon model files are not stored in the repo: the browser downloads them on
+# first run (GitHub Release / HF mirror). Kept locally for dev.
+public/models/
+# Designer workspace (Hilo canvases, sqlite, mockup images)
+Language tutor web/
+# Secrets
+.hf-token
+*.env
