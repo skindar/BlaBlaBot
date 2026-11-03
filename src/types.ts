@@ -78,7 +78,6 @@ export interface Settings {
   /** free-form topic/instructions for the tutor (sidebar "Let's talk about…" textarea) */
   extraPrompt: string
   /** Google OAuth Client ID (Drive sync) */
-  googleClientId: string
   /** auto-sync flashcards/history/diary with Google Drive */
   driveAutoSync: boolean
   /** diary mode: the tutor is a supportive listener, user messages go to the diary */

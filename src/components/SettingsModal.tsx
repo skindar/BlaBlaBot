@@ -10,6 +10,7 @@ import { TARGET_LANG_LIST, langInfo, phononVoices, resolvePhononVoice } from '..
 import { ASR_MODELS, DEFAULT_ASR_KEY } from '../lib/asr'
 import { LlmEngine, availableLlmModels, llmModelByKey } from '../lib/llm'
 import { ttsEngine } from '../lib/tts'
+import { BUILT_IN_CLIENT_ID } from '../lib/gdrive'
 import {
   configureSync,
   doSignOut,
@@ -46,8 +47,8 @@ function SyncControls({
 
   useEffect(() => subscribeSync(setSync), [])
   useEffect(() => {
-    configureSync({ clientId: settings.googleClientId, autoSync: settings.driveAutoSync })
-  }, [settings.googleClientId, settings.driveAutoSync])
+    configureSync({ autoSync: settings.driveAutoSync })
+  }, [settings.driveAutoSync])
 
   const signIn = () => {
     void doSignIn().catch(() => undefined)
@@ -100,7 +101,7 @@ function SyncControls({
           ) : (
             <button
               className="rounded-full bg-[#526f60] px-5 py-2.5 text-xs text-white hover:bg-[#466052] disabled:opacity-40"
-              disabled={!settings.googleClientId || sync.syncing}
+              disabled={!BUILT_IN_CLIENT_ID || sync.syncing}
               onClick={signIn}
               type="button"
             >
@@ -383,18 +384,7 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
         {/* ---------- Google Drive ---------- */}
         <section className="mt-4 rounded-[20px] border border-[#e5e6de] bg-white p-5">
           <h3 className={sectionTitle}>{t('syncSection')}</h3>
-          <div className={`${rowCls} mt-4`}>
-            <label className={labelCls} htmlFor="set-google-id">{t('googleClientId')}</label>
-            <input
-              className={inputCls}
-              id="set-google-id"
-              onChange={e => onChange({ googleClientId: e.target.value })}
-              placeholder="1234567890-xxxxxxxx.apps.googleusercontent.com"
-              type="text"
-              value={settings.googleClientId}
-            />
-            <p className="text-[11px] leading-relaxed text-[#94988f]">{t('googleClientIdHint')}</p>
-          </div>
+          {!BUILT_IN_CLIENT_ID && <p className="mt-2 text-[11px] leading-relaxed text-[#94988f]">{t('googleClientIdBakedHint')}</p>}
           <div className="mt-4">
             <SyncControls settings={settings} onChange={onChange} />
           </div>

@@ -8,6 +8,7 @@ import { useI18n } from '../i18n'
 import { Icon } from '../ui/design'
 import { langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
 import { scenarioById, selectScenario, nextScenario, type Scenario } from '../lib/scenarios'
+import { TopicFigure } from './TopicFigure'
 import { tutorSession } from '../lib/store'
 import { getSyncStatus, subscribeSync } from '../lib/sync'
 
@@ -31,6 +32,8 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
   const [sync] = useState(getSyncStatus)
   const [levelOpen, setLevelOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
+  // every "explore another topic" click also rebuilds the lattice figure
+  const [figureSeed, setFigureSeed] = useState(0)
 
   useMemo(() => subscribeSync, []) // keep the import; status refreshes on remount
 
@@ -42,8 +45,14 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
   const voices = phononVoices(lang, phononBase)
 
   return (
-    <aside className="scroll-sage sticky top-24 hidden h-[calc(100dvh-6rem)] w-80 shrink-0 flex-col justify-between overflow-y-auto border-l border-[#e5e6de] px-6 pb-7 pt-8 xl:flex">
-      <div>
+    /* h-full, not h-dvh: the panel lives below the 96px header, inside the
+       middle section's content row. h-full spans exactly the row's height
+       (viewport minus header), so the bottom stays on screen and the
+       scroller below reaches every element. */
+    <aside className="hidden h-full w-80 shrink-0 flex-col border-l border-[#e5e6de] xl:flex">
+      <div className="scroll-sage min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-full flex-col px-6 pb-7 pt-8">
+      <div className="shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t('inspirationTitle')}</h2>
           <button aria-label={t('closePanel')} onClick={onClose} type="button">
@@ -59,9 +68,8 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
             <Icon name="compass" size={19} />
           </div>
           <p className="mt-4 text-[22px] leading-[1.25] tracking-[-0.6px]">{topicTitle}</p>
-          <div className="mt-3 flex h-[43px] items-center gap-3">
-            <img alt="" className="h-[35px] w-40" src={`${import.meta.env.BASE_URL}assets/13225.svg`} />
-            <Icon name="sun" size={25} />
+          <div className="mt-4 flex justify-center">
+            <TopicFigure seed={figureSeed} />
           </div>
           <button
             className="mt-3 flex items-center gap-[7px] text-xs text-[#526f60]"
@@ -69,6 +77,7 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
               // switching the topic = switching the scenario via the topic field
               const next = nextScenario(scenario)
               onChange({ extraPrompt: next.title })
+              setFigureSeed(f => f + 1)
             }}
             type="button"
           >
@@ -103,7 +112,7 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
         </section>
       </div>
 
-      <section className="mt-10 border-t border-[#e5e6de] pt-5">
+      <section className="mt-auto shrink-0 border-t border-[#e5e6de] pt-5">
         <h3 className="text-[10px] font-semibold tracking-[1.1px] text-[#94988f]">
           {t('makeItYours')}
         </h3>
@@ -202,6 +211,8 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
           <p>{sync.signedIn ? t('savedInDiary') : t('syncOffHint')}</p>
         </div>
       </section>
+      </div>
+      </div>
     </aside>
   )
 }

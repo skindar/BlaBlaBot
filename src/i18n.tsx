@@ -169,8 +169,7 @@ const RU: Dict = {
 
   // Google Drive sync
   syncSection: 'Google Drive',
-  googleClientId: 'Google Client ID',
-  googleClientIdHint: 'OAuth Client ID веб-приложения из Google Cloud Console (разрешённые JS-источники = адрес сайта).',
+  googleClientIdBakedHint: 'Вход работает из коробки: Client ID приложения задан при сборке (VITE_GOOGLE_CLIENT_ID).',
   syncSignIn: 'Войти через Google',
   syncSignOut: 'Выйти',
   syncSignedInAs: 'Синхронизация: {email}',
@@ -449,8 +448,7 @@ const EN: Dict = {
 
   // Google Drive sync
   syncSection: 'Google Drive',
-  googleClientId: 'Google Client ID',
-  googleClientIdHint: 'Web-app OAuth Client ID from Google Cloud Console (authorized JS origins = your site URL).',
+  googleClientIdBakedHint: 'Sign-in works out of the box: the app Client ID is baked in at build time (VITE_GOOGLE_CLIENT_ID).',
   syncSignIn: 'Sign in with Google',
   syncSignOut: 'Sign out',
   syncSignedInAs: 'Syncing as {email}',

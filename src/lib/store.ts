@@ -54,7 +54,7 @@ function nextId(): number {
 
 // ---------- Change events (Drive sync schedules its pushes off these) ----------
 
-export type DirtyKind = 'vocab' | 'history' | 'diary'
+export type DirtyKind = 'vocab' | 'history' | 'diary' | 'activity'
 let dirtyHandler: ((kind: DirtyKind, lang: TargetLang) => void) | null = null
 
 export function setStoreDirtyHandler(fn: ((kind: DirtyKind, lang: TargetLang) => void) | null): void {
@@ -97,6 +97,7 @@ export const conversation = {
       created_at: new Date().toISOString(),
     })
     writeJson(messagesKey(lang), messages)
+    activity.bump()
     fireDirty('history', lang)
   },
 
@@ -405,6 +406,7 @@ export const diary = {
     }
     entries.push(entry)
     writeJson(DIARY_KEY, entries)
+    activity.bump()
     fireDirty('diary', lang)
     return entry
   },
@@ -487,6 +489,30 @@ export const diaryRefined = {
     const all = readJson<DiaryRefined[]>(DIARY_REFINED_KEY, [])
     const next = all.filter(r => r.lang !== lang || dates.has(r.date))
     if (next.length !== all.length) writeJson(DIARY_REFINED_KEY, next)
+  },
+}
+
+// ---------- Activity calendar (the streak's data, synced as activity.csv) ----------
+
+const ACTIVITY_KEY = 'gt-web-activity'
+
+export const activity = {
+  /** one more recorded action today (a chat line, a diary line) */
+  bump(n = 1): void {
+    const days = readJson<Record<string, number>>(ACTIVITY_KEY, {})
+    const key = localDate(new Date().toISOString())
+    days[key] = (days[key] ?? 0) + n
+    writeJson(ACTIVITY_KEY, days)
+    fireDirty('activity', 'de')
+  },
+
+  list(): Record<string, number> {
+    return readJson<Record<string, number>>(ACTIVITY_KEY, {})
+  },
+
+  replaceAll(days: Record<string, number>): void {
+    writeJson(ACTIVITY_KEY, days)
+    fireDirty('activity', 'de')
   },
 }
 

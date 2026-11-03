@@ -137,7 +137,8 @@ export function Sidebar({
           <p className="mt-2.5 text-xs leading-[1.5] text-[#737970]">
             {t('streakText', { days: streak })}
           </p>
-          <div className="mt-2.5 flex justify-between">
+          {googleSignedIn && (
+        <div className="mt-2.5 flex justify-between">
             {'MTWTFSS'.split('').map((day, index) => {
               const dayIdx = (new Date().getDay() + 6) % 7
               return (
@@ -150,6 +151,7 @@ export function Sidebar({
               )
             })}
           </div>
+      )}
         </section>
         <button
           className="mt-5 flex w-full items-center gap-2.5 px-2 text-left"

@@ -7,6 +7,11 @@
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const FOLDER_NAME = 'BlaBlaBot'
+
+/** The app owner's OAuth client id, baked in at build time
+ *  (VITE_GOOGLE_CLIENT_ID in .env) — any visitor can sign in with their
+ *  own Google account; drive.file scopes everything to THEIR Drive. */
+export const BUILT_IN_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const TOKEN_KEY = 'gt-gdrive-token'
 
 interface GisTokenResponse {
@@ -217,7 +222,7 @@ async function findDataFile(name: string): Promise<DriveFile | null> {
   return data.files?.[0] ?? null
 }
 
-/** Download a JSON file; null when it does not exist yet */
+/** Download a JSON file; null when it does not exist yet (legacy pulls) */
 export async function loadJson<T>(name: string): Promise<T | null> {
   const file = await findDataFile(name)
   if (!file) return null
@@ -225,15 +230,22 @@ export async function loadJson<T>(name: string): Promise<T | null> {
   return (await res.json()) as T
 }
 
-/** Create or overwrite a JSON file in the app folder */
-export async function saveJson(name: string, data: unknown): Promise<void> {
+/** Download a text file; null when it does not exist yet */
+export async function loadText(name: string): Promise<string | null> {
+  const file = await findDataFile(name)
+  if (!file) return null
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`)
+  return await res.text()
+}
+
+/** Create or overwrite a text file (csv / markdown) in the app folder */
+export async function saveText(name: string, text: string, mimeType: string): Promise<void> {
   const parent = await ensureFolder()
   const existing = await findDataFile(name)
-  const body = JSON.stringify(data)
   if (existing) {
     await driveFetch(
       `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`,
-      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body },
+      { method: 'PATCH', headers: { 'Content-Type': mimeType }, body: text },
     )
     return
   }
@@ -242,7 +254,7 @@ export async function saveJson(name: string, data: unknown): Promise<void> {
     'metadata',
     new Blob([JSON.stringify({ name, parents: [parent] })], { type: 'application/json' }),
   )
-  form.append('file', new Blob([body], { type: 'application/json' }))
+  form.append('file', new Blob([text], { type: mimeType }))
   await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
     method: 'POST',
     body: form,
@@ -258,8 +270,16 @@ export async function userEmail(): Promise<string> {
 
 // ---------- File names ----------
 
+/** chat-{lang}.md — one readable transcript per language */
 export function historyFileName(lang: string): string {
+  return `chat-${lang}.md`
+}
+export const VOCAB_FILE = 'cards.csv'
+export const DIARY_FILE = 'diary.md'
+export const ACTIVITY_FILE = 'activity.csv'
+/** the pre-csv/md sync files, still read once during a pull */
+export const LEGACY_VOCAB_FILE = 'vocab.json'
+export const LEGACY_DIARY_FILE = 'diary.json'
+export function legacyHistoryFileName(lang: string): string {
   return `history-${lang}.json`
 }
-export const VOCAB_FILE = 'vocab.json'
-export const DIARY_FILE = 'diary.json'

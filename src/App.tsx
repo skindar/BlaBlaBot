@@ -53,7 +53,6 @@ function defaultSettings(): Settings {
     showTranslation: true,
     handsFree: true,
     extraPrompt: '',
-    googleClientId: '',
     driveAutoSync: true,
   }
 }
@@ -82,6 +81,7 @@ function loadSettings(): Settings {
     delete (s as unknown as Record<string, unknown>).ttsVoice
     delete (s as unknown as Record<string, unknown>).phononBase
     delete (s as unknown as Record<string, unknown>).topic
+    delete (s as unknown as Record<string, unknown>).googleClientId
     return s
   } catch {
     return defaultSettings()
@@ -179,8 +179,8 @@ function AppInner() {
     initSyncEvents()
   }, [])
   useEffect(() => {
-    configureSync({ clientId: settings.googleClientId, autoSync: settings.driveAutoSync })
-  }, [settings.googleClientId, settings.driveAutoSync])
+    configureSync({ autoSync: settings.driveAutoSync })
+  }, [settings.driveAutoSync])
 
   // Current-language history from localStorage (analog of GET /api/history)
   useEffect(() => {
@@ -466,7 +466,7 @@ function AppInner() {
 
   return (
     <I18nProvider lang={settings.uiLang}>
-      <main className="flex min-h-dvh bg-[#faf9f6] text-[#292e2a]">
+      <main className="flex h-dvh overflow-hidden bg-[#faf9f6] text-[#292e2a]">
         <Sidebar
           settings={settings}
           active={tab}

@@ -5,18 +5,25 @@
 // auto-sync is on.
 
 import {
+  ACTIVITY_FILE,
   DIARY_FILE,
+  BUILT_IN_CLIENT_ID,
   GDriveError,
+  LEGACY_DIARY_FILE,
+  LEGACY_VOCAB_FILE,
   VOCAB_FILE,
   hasValidToken,
   historyFileName,
+  legacyHistoryFileName,
   loadJson,
+  loadText,
   requestToken,
-  saveJson,
+  saveText,
   signOut,
   userEmail,
 } from './gdrive'
 import {
+  activity,
   conversation,
   diary,
   setStoreDirtyHandler,
@@ -24,6 +31,16 @@ import {
   type DirtyKind,
   type StoredMessage,
 } from './store'
+import {
+  activityFromCsv,
+  activityToCsv,
+  diaryFromMd,
+  diaryToMd,
+  historyFromMd,
+  historyToMd,
+  vocabFromCsv,
+  vocabToCsv,
+} from './driveFormats'
 import { TARGET_LANG_LIST, type TargetLang } from './langs'
 import type { DiaryEntry, VocabItem } from '../types'
 
@@ -66,9 +83,10 @@ export function getSyncStatus(): SyncStatus {
   return status
 }
 
-/** Called by the App on mount and when the settings change */
-export function configureSync(opts: { clientId: string; autoSync: boolean }): void {
-  clientId = opts.clientId.trim()
+/** Called by the App on mount and when the settings change.
+ *  The client id comes exclusively from the build (VITE_GOOGLE_CLIENT_ID). */
+export function configureSync(opts: { autoSync: boolean }): void {
+  clientId = BUILT_IN_CLIENT_ID.trim()
   autoSync = opts.autoSync
   if (hasValidToken() && !status.signedIn) {
     void resumeSession()
@@ -149,42 +167,83 @@ export function mergeHistory(local: StoredMessage[], remote: StoredMessage[]): S
 
 // ---------- Pull / push ----------
 
+/** Per date: the richer side wins — counts never double on merges */
+function mergeActivity(local: Record<string, number>, remote: Record<string, number>): Record<string, number> {
+  const out = { ...remote }
+  for (const [date, n] of Object.entries(local)) {
+    out[date] = Math.max(out[date] ?? 0, n)
+  }
+  return out
+}
+
 async function pullAll(): Promise<void> {
-  // vocab
-  const remoteVocab = await loadJson<{ items: VocabItem[] }>(VOCAB_FILE)
-  if (remoteVocab?.items?.length) {
-    const merged = mergeVocab(vocab.allLangs(), remoteVocab.items)
-    for (const lang of TARGET_LANG_LIST) {
-      vocab.replaceAll(lang, merged.filter(i => (i.lang ?? 'de') === lang))
+  // vocab — cards.csv (legacy vocab.json still read once)
+  let remoteVocab = await loadText(VOCAB_FILE)
+  if (remoteVocab !== null && remoteVocab.trim() !== '') {
+    const items = vocabFromCsv(remoteVocab)
+    if (items.length > 0) {
+      const merged = mergeVocab(vocab.allLangs(), items)
+      for (const lang of TARGET_LANG_LIST) {
+        vocab.replaceAll(lang, merged.filter(i => (i.lang ?? 'de') === lang))
+      }
+    }
+  } else {
+    const legacy = await loadJson<{ items: VocabItem[] }>(LEGACY_VOCAB_FILE)
+    if (legacy?.items?.length) {
+      const merged = mergeVocab(vocab.allLangs(), legacy.items)
+      for (const lang of TARGET_LANG_LIST) {
+        vocab.replaceAll(lang, merged.filter(i => (i.lang ?? 'de') === lang))
+      }
     }
   }
-  // history (per language)
+  // history (per language) — chat-{lang}.md (legacy history-{lang}.json)
   for (const lang of TARGET_LANG_LIST) {
-    const remoteHistory = await loadJson<{ messages: StoredMessage[] }>(historyFileName(lang))
-    if (remoteHistory?.messages?.length) {
-      const merged = mergeHistory(conversation.loadRaw(lang), remoteHistory.messages)
+    const remoteText = await loadText(historyFileName(lang))
+    if (remoteText !== null && remoteText.trim() !== '') {
+      const merged = mergeHistory(conversation.loadRaw(lang), historyFromMd(remoteText))
       conversation.replaceRaw(lang, merged)
+      continue
+    }
+    const legacy = await loadJson<{ messages: StoredMessage[] }>(legacyHistoryFileName(lang))
+    if (legacy?.messages?.length) {
+      conversation.replaceRaw(lang, mergeHistory(conversation.loadRaw(lang), legacy.messages))
     }
   }
-  // diary
-  const remoteDiary = await loadJson<{ entries: DiaryEntry[] }>(DIARY_FILE)
-  if (remoteDiary?.entries?.length) {
-    diary.replaceAll(mergeDiary(diary.list(), remoteDiary.entries))
+  // diary — diary.md (legacy diary.json)
+  const remoteDiaryText = await loadText(DIARY_FILE)
+  if (remoteDiaryText !== null && remoteDiaryText.trim() !== '') {
+    const entries = diaryFromMd(remoteDiaryText)
+    if (entries.length > 0) diary.replaceAll(mergeDiary(diary.list(), entries))
+  } else {
+    const legacy = await loadJson<{ entries: DiaryEntry[] }>(LEGACY_DIARY_FILE)
+    if (legacy?.entries?.length) diary.replaceAll(mergeDiary(diary.list(), legacy.entries))
   }
+  // activity — activity.csv
+  const remoteActivity = await loadText(ACTIVITY_FILE)
+  if (remoteActivity !== null && remoteActivity.trim() !== '') {
+    activity.replaceAll(mergeActivity(activity.list(), activityFromCsv(remoteActivity)))
+  }
+  // normalize Drive to the fresh merged state of every kind
+  await pushKind('vocab', 'de')
+  await pushKind('diary', 'de')
+  await pushKind('activity', 'de')
+  for (const lang of TARGET_LANG_LIST) await pushKind('history', lang)
 }
 
 /** Push one data kind; used by the debounced auto-push and after a pull */
 async function pushKind(kind: DirtyKind, lang: TargetLang): Promise<void> {
   if (kind === 'vocab') {
-    await saveJson(VOCAB_FILE, { kind: 'vocab', items: vocab.allLangs() })
+    await saveText(VOCAB_FILE, vocabToCsv(vocab.allLangs()), 'text/csv')
   } else if (kind === 'history') {
-    await saveJson(historyFileName(lang), {
-      kind: 'history',
-      lang,
-      messages: conversation.loadRaw(lang),
-    })
+    await saveText(
+      historyFileName(lang),
+      historyToMd(lang, conversation.loadRaw(lang)),
+      'text/markdown',
+    )
+  } else if (kind === 'activity') {
+    await saveText(ACTIVITY_FILE, activityToCsv(activity.list()), 'text/csv')
   } else {
-    await saveJson(DIARY_FILE, { kind: 'diary', entries: diary.list() })
+    await saveText(DIARY_FILE, diaryToMd(diary.list()), 'text/markdown')
   }
 }
 

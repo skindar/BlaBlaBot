@@ -33,6 +33,11 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # The OAuth client id, injected from Actions secrets so it stays
+          # out of the repo. It is a PUBLIC identifier by design (no client
+          # secret exists in this flow) — Vite inlines it into the bundle.
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
 
       - uses: actions/configure-pages@v5
 

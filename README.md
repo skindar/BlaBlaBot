@@ -42,22 +42,43 @@ logged to the Diary tab verbatim, with the UI-language translation and the
 corrected version when there were grammar mistakes. See
 `docs/tutor-methodology.md` for the conversation-tutor methodology.
 
-## Google Drive sync (chat, flashcards, diary)
+## Google Drive sync (cards, chats, diary, activity calendar)
 
 No server: Google Identity Services' implicit token flow + the Drive v3 REST
 API with the narrow `drive.file` scope — the app can only see the files it
-created itself. Data lives in a `BlaBlaBot` folder as plain JSON files
-(`vocab.json`, `history-<lang>.json`, `diary.json`).
+created itself. Every visitor signs in with **their own** Google account and
+their data lands in **their own** Drive. Files are human-readable:
+`cards.csv` (opens in Google Sheets), `diary.md`, `chat-<lang>.md`,
+`activity.csv` — one OAuth client serves all users.
 
-1. Create an OAuth Client ID (type *Web application*) in Google Cloud Console;
-   add your site URL (e.g. `https://<owner>.github.io`) under
-   *Authorized JavaScript origins*. No client secret is involved.
-2. Paste the Client ID into Settings → Google Drive and press
-   "Sign in with Google" (consent screen needs the Drive scope enabled).
-3. With auto-sync on, every chat turn, flashcard change and diary entry is
-   uploaded (debounced); on sign-in the app pulls the Drive state and merges
-   (vocabulary: union by id, last-write-wins; diary: union by id; chat:
-   the newer tail wins). The access token lives in sessionStorage only.
+### One-time setup for the app owner
+
+1. In [Google Cloud Console](https://console.cloud.google.com) create a
+   project → *APIs & Services → OAuth consent screen*: **External**, app
+   name "BlaBlaBot", add the `.../auth/drive.file` scope, then **Publish to
+   production** (test mode caps users at 100; `drive.file` needs no
+   verification badge).
+2. *Credentials → Create credentials → OAuth client ID*, type
+   **Web application**. Under *Authorized JavaScript origins* add both:
+   - `http://localhost:5173` (local dev)
+   - `https://<owner>.github.io` and/or your custom domain (GitHub Pages)
+3. Put the Client ID into the build: copy `.env.example` to `.env` and set
+   `VITE_GOOGLE_CLIENT_ID=...`. No client secret — the token flow is
+   fully client-side.
+4. Deploy. Any Gmail user can now press "Sign in with Google": the browser
+   shows Google's consent, the app gets a `drive.file`-scoped token, and
+   reads/writes only in that user's own `BlaBlaBot` folder. The Client ID
+   is baked into the build — there is nothing to configure in the app.
+
+### How sync behaves
+
+With auto-sync on, every chat turn, flashcard change, diary entry and
+activity bump is uploaded (debounced 2.5 s); on sign-in the app pulls the
+Drive state and merges (vocabulary: union by uid, last-write-wins; diary:
+union by uid; chat: the newer tail wins; activity: per-date maximum).
+The access token lives in sessionStorage only. Old JSON-format files
+(`vocab.json`, `history-<lang>.json`, `diary.json`) are still read once and
+upgraded to the readable formats.
 
 ## Running
 
