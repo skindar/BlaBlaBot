@@ -179,7 +179,9 @@ export function InputCard({
               onKeyDown={event => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
-                  if (draft.trim() && stage === 'idle') {
+                  // blocked only while a generation is running — during
+                  // playback and hands-free listening sending interrupts
+                  if (draft.trim() && stage !== 'processing') {
                     onSendText(draft.trim())
                     setDraft('')
                     setTyping(false)
@@ -189,7 +191,7 @@ export function InputCard({
             />
             <button
               className="shrink-0 rounded-full bg-[#526f60] px-5 py-3 text-sm text-white transition-colors hover:bg-[#466052] disabled:opacity-40"
-              disabled={!draft.trim() || stage !== 'idle'}
+              disabled={!draft.trim() || stage === 'processing'}
               onClick={() => {
                 if (!draft.trim()) return
                 onSendText(draft.trim())

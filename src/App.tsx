@@ -343,13 +343,15 @@ function AppInner() {
 
   const handleText = useCallback(
     (text: string) => {
-      if (stage === 'recording' || stage === 'processing') return
-      // tapping a chip while the bot is speaking interrupts the speech and
-      // sends — a silent no-op here was swallowing every chip click
+      if (stage === 'processing') return
+      // chips and typed lines must always reach the tutor: interrupt playback,
+      // and in hands-free mode close the auto-opened mic (its recording is
+      // discarded — the chip text is what the student chose to say)
       if (stage === 'playing') cancelSpeech()
+      if (stage === 'recording') recorder.cancel()
       void sendChat({ text })
     },
-    [sendChat, stage],
+    [sendChat, stage, recorder],
   )
 
   // hands-free mic: auto-submit after a short silence pause
