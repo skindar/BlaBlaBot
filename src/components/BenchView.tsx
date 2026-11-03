@@ -7,14 +7,17 @@ import { useI18n, type UiLang } from '../i18n'
 import {
   aggregateByModel,
   allLoads,
+  allProbes,
   allTurns,
   clearBench,
   getEnv,
   runBenchmark,
+  runContextProbe,
   snapshotEnv,
   toMarkdown,
   toJSON,
   type BenchRunProgress,
+  type ContextProbe,
   type EnvSnapshot,
   type LoadMetric,
   type TurnMetrics,
@@ -43,6 +46,8 @@ export function BenchView({ active, targetLang, uiLang }: Props) {
   const [loads, setLoads] = useState<LoadMetric[]>([])
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [running, setRunning] = useState(false)
+  const [probing, setProbing] = useState(false)
+  const [probe, setProbe] = useState<ContextProbe | null>(null)
   const [progress, setProgress] = useState<BenchRunProgress | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -51,6 +56,8 @@ export function BenchView({ active, targetLang, uiLang }: Props) {
   const refresh = useCallback(() => {
     setTurns(allTurns())
     setLoads(allLoads())
+    const probes = allProbes()
+    setProbe(probes.length > 0 ? probes[probes.length - 1] : null)
   }, [])
 
   useEffect(() => {
@@ -94,6 +101,29 @@ export function BenchView({ active, targetLang, uiLang }: Props) {
       refresh()
     }
   }, [running, models, checked, targetLang, uiLang, t, refresh])
+
+  const onProbe = useCallback(async () => {
+    if (probing || running) return
+    const modelKey = models.find(m => checked[m.key])?.key
+    if (!modelKey) return
+    setProbing(true)
+    setProgress(null)
+    try {
+      const result = await runContextProbe({
+        modelKey,
+        targetLang,
+        uiLang,
+        onProgress: setProgress,
+      })
+      if (result) setProbe(result)
+      setToast(t('benchProbe'))
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : String(err))
+    } finally {
+      setProbing(false)
+      refresh()
+    }
+  }, [probing, running, models, checked, targetLang, uiLang, t, refresh])
 
   const copy = useCallback(
     (text: string) => {
@@ -154,15 +184,56 @@ export function BenchView({ active, targetLang, uiLang }: Props) {
             </label>
           ))}
         </div>
-        <button type="button" className="card-btn primary" onClick={() => void onRun()} disabled={running}>
-          {running ? t('benchRunning') : t('benchRun')}
-        </button>
+        <div className="bench-actions">
+          <button type="button" className="card-btn primary" onClick={() => void onRun()} disabled={running || probing}>
+            {running ? t('benchRunning') : t('benchRun')}
+          </button>
+          <button type="button" className="card-btn" onClick={() => void onProbe()} disabled={running || probing} title={t('benchProbeHint')}>
+            {probing ? t('benchRunning') : t('benchProbe')}
+          </button>
+        </div>
+        <p className="bench-hint">{t('benchProbeHint')}</p>
         {progress && (
           <p className="bench-progress">
             {t('benchProgress', { model: progress.modelKey || progress.text, text: progress.text })}
           </p>
         )}
       </div>
+
+      {probe && (
+        <div className="bench-section">
+          <h3>
+            {t('benchProbeTitle')} — {probe.modelId} (window {probe.contextWindow})
+          </h3>
+          <div className="bench-table-wrap">
+            <table className="bench-table">
+              <thead>
+                <tr>
+                  <th>{t('benchColTurn')}</th>
+                  <th>{t('benchColPromptTok')}</th>
+                  <th>{t('benchColTtft')}</th>
+                  <th>{t('benchColDecode')}</th>
+                  <th>{t('benchColWall')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {probe.rows.map((r, i) => (
+                  <tr key={i} className={r.error ? 'bench-row-error' : undefined}>
+                    <td>{r.turn}</td>
+                    <td>{r.promptTokens ?? '—'}</td>
+                    <td>{fmt0(r.ttftMs)}</td>
+                    <td>{fmt1(r.decodeTokS)}</td>
+                    <td>{r.wallMs ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {probe.rows[probe.rows.length - 1]?.error && (
+            <p className="bench-hint">⚠ {probe.rows[probe.rows.length - 1].error}</p>
+          )}
+        </div>
+      )}
 
       {aggregate.length > 0 && (
         <div className="bench-section">

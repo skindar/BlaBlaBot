@@ -145,6 +145,15 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
             />
             <label htmlFor="set-translation">{t('showTranslation')}</label>
           </div>
+          <div className="group row">
+            <input
+              id="set-bench"
+              type="checkbox"
+              checked={Boolean(settings.showBench)}
+              onChange={e => onChange({ showBench: e.target.checked })}
+            />
+            <label htmlFor="set-bench">{t('showBenchTab')}</label>
+          </div>
         </section>
 
         {/* ---------- Speech ---------- */}

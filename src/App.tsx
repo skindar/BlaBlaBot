@@ -382,9 +382,11 @@ function AppInner() {
           <button type="button" className={`tab${tab === 'cards' ? ' active' : ''}`} onClick={() => setTab('cards')}>
             {t('tabCards')}
           </button>
-          <button type="button" className={`tab${tab === 'bench' ? ' active' : ''}`} onClick={() => setTab('bench')}>
-            {t('tabBench')}
-          </button>
+          {settings.showBench && (
+            <button type="button" className={`tab${tab === 'bench' ? ' active' : ''}`} onClick={() => setTab('bench')}>
+              {t('tabBench')}
+            </button>
+          )}
           <button
             type="button"
             className="tab-btn-icon"
@@ -442,9 +444,9 @@ function AppInner() {
             targetLang={lang}
             uiLang={settings.uiLang}
           />
-        ) : (
+        ) : tab === 'bench' && settings.showBench ? (
           <BenchView active={tab === 'bench'} targetLang={lang} uiLang={settings.uiLang} />
-        )}
+        ) : null}
         {selection && (
           <button
             type="button"

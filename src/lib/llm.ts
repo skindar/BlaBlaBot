@@ -11,6 +11,10 @@ export interface LlmModelOption {
   label: string
   /** approximate first-download size */
   size: string
+  /** ~1B and below: use the tiny-tier prompt contract (2-key tutor schema +
+   *  a separate corrections call) — measured to lift strict-JSON compliance
+   *  from near-zero to usable */
+  tiny?: boolean
 }
 
 /** Sidebar candidates; filtered against the installed web-llm prebuilt list */
@@ -18,12 +22,12 @@ const MODEL_CANDIDATES: LlmModelOption[] = [
   { key: 'qwen3-1.7b', modelId: 'Qwen3-1.7B-q4f16_1-MLC', label: 'Qwen3-1.7B', size: '' },
   { key: 'gemma-4-e2b', modelId: 'gemma-4-E2B-it-q4f16_1-MLC', label: 'Gemma-4 E2B (как нативная)', size: '' },
   { key: 'qwen3-4b', modelId: 'Qwen3-4B-q4f16_1-MLC', label: 'Qwen3-4B', size: '' },
-  { key: 'qwen3-0.6b', modelId: 'Qwen3-0.6B-q4f16_1-MLC', label: 'Qwen3-0.6B', size: '' },
-  { key: 'gemma3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B', size: '' },
+  { key: 'qwen3-0.6b', modelId: 'Qwen3-0.6B-q4f16_1-MLC', label: 'Qwen3-0.6B', size: '', tiny: true },
+  { key: 'gemma3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B', size: '', tiny: true },
+  { key: 'llama-3.2-1b', modelId: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-1B', size: '', tiny: true },
   { key: 'qwen2.5-3b', modelId: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-3B', size: '' },
   { key: 'qwen2.5-1.5b', modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-1.5B', size: '' },
   { key: 'llama-3.2-3b', modelId: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-3B', size: '' },
-  { key: 'llama-3.2-1b', modelId: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-1B', size: '' },
   { key: 'gemma-2-2b', modelId: 'gemma-2-2b-it-q4f16_1-MLC', label: 'Gemma-2-2B', size: '' },
 ]
 
@@ -46,6 +50,18 @@ export function availableLlmModels(): LlmModelOption[] {
 
 export function llmModelByKey(key: string): LlmModelOption {
   return availableLlmModels().find(m => m.key === key) ?? availableLlmModels()[0]
+}
+
+/** Context window of the prebuilt web-llm build (overrides.context_window_size,
+ *  hard-capped to 4096 in every prebuilt model regardless of the model's native
+ *  capability) plus the KV-cache margin to reserve for generation. */
+export function contextWindowFor(key: string): { window: number; promptBudget: number } {
+  const option = llmModelByKey(key)
+  const rec = webllm.prebuiltAppConfig.model_list.find(m => m.model_id === option.modelId)
+  const window =
+    (rec as { overrides?: { context_window_size?: number } } | undefined)?.overrides?.context_window_size ?? 4096
+  // reserve: max_tokens (900) + safety margin (256)
+  return { window, promptBudget: Math.max(0, window - 900 - 256) }
 }
 
 export interface LoadProgress {

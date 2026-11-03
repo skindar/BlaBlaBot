@@ -18,7 +18,17 @@ import {
   stripQuoteWrappers,
   stripThink,
 } from './parse'
-import { buildTutorMessages, buildTranslateMessages, buildVocabMessages, vocabNotRealDefaultComment } from '../prompts'
+import {
+  buildTutorMessages,
+  buildTutorMessagesSimple,
+  buildCorrectionsMessages,
+  buildTranslateMessages,
+  buildVocabMessages,
+  vocabNotRealDefaultComment,
+  type LlmMessage,
+} from '../prompts'
+import { parseCorrectionsJson } from './parse'
+import { contextWindowFor } from './llm'
 import { conversation, lookupDictionary, vocab } from './store'
 import { ttsEngine } from './tts'
 import { phononEngine } from './ttsPhonon'
@@ -32,6 +42,36 @@ export class InvalidParameterError extends PipelineError {}
 const LLM_TEMPERATURE = 0.7
 const LLM_TRANSLATION_TEMPERATURE = 0.2
 const LLM_VOCAB_TEMPERATURE = 0.3
+const LLM_CORRECTIONS_TEMPERATURE = 0.2
+
+/** Calibrated chars-per-token per model (updated after every tutor call with
+ *  the real prompt_tokens) — feeds the history auto-trim estimator */
+const charsPerToken = new Map<string, number>()
+const DEFAULT_CHARS_PER_TOKEN = 3.2
+
+function estimateTokens(messages: LlmMessage[], modelId: string): number {
+  const chars = messages.reduce((acc, m) => acc + m.content.length + 8, 0)
+  return Math.ceil(chars / (charsPerToken.get(modelId) ?? DEFAULT_CHARS_PER_TOKEN))
+}
+
+/** Auto-trim: drop oldest user+assistant pairs until the prompt fits the
+ *  model's context budget (prebuilt web-llm builds hard-cap at 4096 tokens,
+ *  so a growing dialog would otherwise hit the wall mid-conversation). */
+function trimHistoryToFit(
+  messages: LlmMessage[],
+  modelId: string,
+  llmKey: string,
+): { messages: LlmMessage[]; trimmedPairs: number } {
+  const { promptBudget } = contextWindowFor(llmKey)
+  let trimmedPairs = 0
+  let out = messages
+  while (estimateTokens(out, modelId) > promptBudget && out.length > 3) {
+    // keep [0] = system; drop the next user+assistant pair
+    out = [out[0], ...out.slice(3)]
+    trimmedPairs++
+  }
+  return { messages: out, trimmedPairs }
+}
 
 export interface ProcessChatArgs {
   blob?: Blob
@@ -123,9 +163,16 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     userText = text
   }
 
-  // ---- LLM: tutor reply ----
-  const history = conversation.historyForLlm(targetLang)
-  const messages = buildTutorMessages(history, userText, level, targetLang, uiLang, extraPrompt)
+  // ---- LLM: tutor reply (tiny models use the 2-key contract, corrections
+  //  move to their own single-key call) ----
+  const history = conversation.historyForLlm(targetLang, 50)
+  const tutorOption0 = llmEngine.loadedKey ? llmModelByKey(llmEngine.loadedKey) : null
+  const tiny = Boolean(tutorOption0?.tiny)
+  const builtMessages = tiny
+    ? buildTutorMessagesSimple(history, userText, level, targetLang, uiLang, extraPrompt)
+    : buildTutorMessages(history, userText, level, targetLang, uiLang, extraPrompt)
+  const trimmed = tutorOption0 ? trimHistoryToFit(builtMessages, tutorOption0.modelId, tutorOption0.key) : { messages: builtMessages, trimmedPairs: 0 }
+  const messages = trimmed.messages
   const tLlm = nowMs()
   let tutorCall: Awaited<ReturnType<typeof llmEngine.chat>>
   try {
@@ -137,9 +184,52 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   timings.llm_ms = Math.round(nowMs() - tLlm)
 
   const parsed = parseTutorReply(tutorCall.text)
-  const keptCorrections: Correction[] = filterCorrections(parsed.corrections, userText)
+  let keptCorrections: Correction[] = filterCorrections(parsed.corrections, userText)
   const suggestions: Suggestion[] = parsed.suggestions
-  const tutorOption = llmEngine.loadedKey ? llmModelByKey(llmEngine.loadedKey) : null
+  const tutorOption = tutorOption0
+
+  // calibrate the token estimator with the real measurement
+  if (tutorOption && tutorCall.perf?.promptTokens) {
+    const promptChars = messages.reduce((acc, m) => acc + m.content.length + 8, 0)
+    charsPerToken.set(tutorOption.modelId, promptChars / tutorCall.perf.promptTokens)
+  }
+
+  // tiny tier: corrections as a separate single-key call
+  if (tiny && tutorOption) {
+    const tCorr = nowMs()
+    try {
+      const corrCall = await llmEngine.chat(buildCorrectionsMessages(targetLang, uiLang, userText), {
+        temperature: LLM_CORRECTIONS_TEMPERATURE,
+        maxTokens: 400,
+      })
+      timings.corrections_ms = Math.round(nowMs() - tCorr)
+      const corrParsed = parseCorrectionsJson(corrCall.text)
+      keptCorrections = filterCorrections(corrParsed.corrections, userText)
+      recordTurn({
+        stage: 'corrections',
+        llmKey: tutorOption.key,
+        modelId: tutorOption.modelId,
+        device: llmEngine.deviceLabel,
+        temperature: LLM_CORRECTIONS_TEMPERATURE,
+        promptTokens: corrCall.perf?.promptTokens ?? null,
+        completionTokens: corrCall.perf?.completionTokens ?? null,
+        ttftMs: corrCall.perf?.ttftMs ?? null,
+        prefillTokS: corrCall.perf?.prefillTokS ?? null,
+        decodeTokS: corrCall.perf?.decodeTokS ?? null,
+        e2eMs: corrCall.perf?.e2eMs ?? null,
+        wallMs: timings.corrections_ms,
+        parse: corrParsed.method === 'fail' ? 'fail' : corrParsed.method,
+        correctionsRaw: corrParsed.corrections.length,
+        correctionsKept: keptCorrections.length,
+        turnNo: null,
+        schema: 'tiny',
+      })
+    } catch {
+      // corrections are an enhancement, not a requirement — keep the reply
+      timings.corrections_ms = Math.round(nowMs() - tCorr)
+    }
+  }
+
   if (tutorOption) {
     recordTurn({
       stage: 'tutor',
@@ -158,6 +248,7 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       correctionsRaw: parsed.corrections.length,
       correctionsKept: keptCorrections.length,
       turnNo: Math.floor(history.length / 2) + 1,
+      schema: tiny ? 'tiny' : 'full',
     })
   }
 

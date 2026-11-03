@@ -81,6 +81,38 @@ If it is NOT a real ${target} word (made-up, typo, misspelled, or not ${target} 
 }`
 }
 
+/** Tiny-tier tutor contract: two keys instead of three nested structures.
+ *  Measured on 1B-class models: compliance jumps from ~13% to ~75-88% when
+ *  the output schema shrinks; corrections move to their own single-key call. */
+export function tutorSystemPromptSimple(level: string, targetLang: TargetLang, uiLang: 'ru' | 'en'): string {
+  const target = langNameForPrompt(targetLang)
+  const explain = uiLangNameForPrompt(uiLang)
+  const info = langInfo(targetLang)
+  return `You are BlaBlaBot, a patient, friendly ${target} tutor for a student at ${level} level.
+Respond in natural conversational ${target}; ${info.informalAddress}.
+Return ONLY this JSON, nothing else:
+{
+  "reply": "2-3 short sentences in ${target}, ending with ONE question",
+  "suggestions": [{"text": "short ${target} phrase", "translation": "${explain} translation"}]
+}
+Rules:
+- reply: max 30 words, natural spoken ${target}, ends with exactly ONE follow-up question
+- suggestions: exactly 3 short phrases (2-6 words) the student could answer with
+- never mention being an AI, no extra text outside the JSON`
+}
+
+/** Tiny-tier corrections contract: one key, user's last message only, no history */
+export function correctionsSystemPrompt(targetLang: TargetLang, uiLang: 'ru' | 'en'): string {
+  const target = langNameForPrompt(targetLang)
+  const explain = uiLangNameForPrompt(uiLang)
+  return `You are a strict ${target} grammar checker.
+Find GRAMMAR, SPELLING, ARTICLE, CASE and WORD ORDER mistakes in the user's sentence.
+Never rewrite, complete or restructure it; never suggest different words.
+If there are no real mistakes, return an empty list.
+Return ONLY this JSON:
+{"corrections": [{"original": "exact fragment from the sentence", "corrected": "fixed fragment", "explanation": "one short sentence in ${explain}"}]}`
+}
+
 /** Port of build_tutor_messages from backend/models/llm.py */
 export function buildTutorMessages(
   history: LlmMessage[],
@@ -107,6 +139,35 @@ export function buildTranslateMessages(
   return [
     { role: 'system', content: translateSystemPrompt(targetLang, uiLang) },
     { role: 'user', content: `USER: ${userText}\n\nTUTOR: ${reply}` },
+  ]
+}
+
+/** Tiny-tier tutor messages (2-key schema, corrections excluded) */
+export function buildTutorMessagesSimple(
+  history: LlmMessage[],
+  userText: string,
+  level: Level,
+  targetLang: TargetLang,
+  uiLang: 'ru' | 'en',
+  extraInstructions = '',
+): LlmMessage[] {
+  let system = tutorSystemPromptSimple(level, targetLang, uiLang)
+  const extra = extraInstructions.trim()
+  if (extra) {
+    system += `\n\nAdditional instructions from the student (follow them strictly):\n${extra.slice(0, 1000)}`
+  }
+  return [{ role: 'system', content: system }, ...history, { role: 'user', content: userText }]
+}
+
+/** Tiny-tier corrections messages: single-key call on the last user message */
+export function buildCorrectionsMessages(
+  targetLang: TargetLang,
+  uiLang: 'ru' | 'en',
+  userText: string,
+): LlmMessage[] {
+  return [
+    { role: 'system', content: correctionsSystemPrompt(targetLang, uiLang) },
+    { role: 'user', content: userText },
   ]
 }
 

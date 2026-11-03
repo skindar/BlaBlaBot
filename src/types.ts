@@ -78,6 +78,8 @@ export interface Settings {
   googleClientId: string
   /** auto-sync flashcards with Google Drive */
   driveAutoSync: boolean
+  /** show the Bench tab (hidden by default — a developer/article tool) */
+  showBench?: boolean
 }
 
 export interface VocabItem {

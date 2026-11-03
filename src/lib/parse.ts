@@ -6,7 +6,7 @@
 import type { Correction, Suggestion } from '../types'
 
 /** How a tutor reply was extracted — the benchmark's JSON-reliability metric */
-export type ParseMethod = 'json' | 'repaired' | 'regex' | 'plain'
+export type ParseMethod = 'json' | 'repaired' | 'rescued' | 'regex' | 'plain'
 
 export interface TutorReply {
   reply: string
@@ -195,6 +195,34 @@ function regexFallback(cleaned: string): Omit<TutorReply, 'method'> | null {
   }
 }
 
+/** Last-ditch rescue for tiny models that put the JSON inside <think> and
+ *  truncate it: pull a fenced ```json block (possibly unterminated) or the
+ *  first {...} from the RAW text — think blocks included — and balance-close
+ *  whatever was cut off. */
+function thinkJsonRescue(raw: string): Omit<TutorReply, 'method'> | null {
+  const candidates: string[] = []
+  const fence = /```(?:json)?\s*([\s\S]*?)(?:```|$)/.exec(raw)
+  if (fence?.[1]?.includes('{')) candidates.push(fence[1])
+  const brace = raw.indexOf('{')
+  if (brace >= 0) candidates.push(raw.slice(brace))
+  for (const candidate of candidates) {
+    for (const attempt of [balanceJson(candidate), repairJson(balanceJson(candidate) ?? candidate)]) {
+      if (!attempt) continue
+      let data: unknown
+      try {
+        data = JSON.parse(attempt)
+      } catch {
+        continue
+      }
+      if (typeof data === 'object' && data !== null) {
+        const reply = replyFromDict(data as Record<string, unknown>)
+        if (reply !== null) return reply
+      }
+    }
+  }
+  return null
+}
+
 /** Port of parse_tutor_reply. `method` records how the reply was extracted —
  *  the benchmark's JSON-reliability metric for small models. */
 export function parseTutorReply(raw: string): TutorReply {
@@ -219,6 +247,8 @@ export function parseTutorReply(raw: string): TutorReply {
   }
   const rescued = regexFallback(cleaned)
   if (rescued !== null) return { ...rescued, method: 'regex' }
+  const fromThink = thinkJsonRescue(raw)
+  if (fromThink !== null) return { ...fromThink, method: 'rescued' }
   const text = cleaned.trim() || 'Entschuldigung, das habe ich nicht verstanden.'
   return {
     reply: text,
@@ -229,6 +259,60 @@ export function parseTutorReply(raw: string): TutorReply {
     suggestions: [],
     method: 'plain',
   }
+}
+
+export interface CorrectionsReply {
+  corrections: Correction[]
+  method: 'json' | 'repaired' | 'regex' | 'fail'
+}
+
+/** Parse the tiny-tier corrections call: {"corrections": [...]} on the user's
+ *  last message only. Regex fallback extracts {...original/corrected...}
+ *  pairs wherever they appear. */
+export function parseCorrectionsJson(raw: string): CorrectionsReply {
+  const cleaned = cleanRaw(raw)
+  for (const candidate of jsonCandidates(cleaned)) {
+    for (const attempt of [candidate, repairJson(candidate)]) {
+      let data: unknown
+      try {
+        data = JSON.parse(attempt)
+      } catch {
+        continue
+      }
+      if (typeof data === 'object' && data !== null) {
+        const list = (data as Record<string, unknown>).corrections
+        if (Array.isArray(list)) {
+          const corrections: Correction[] = []
+          for (const item of list.slice(0, 10)) {
+            if (typeof item !== 'object' || item === null) continue
+            const { original, corrected } = item as Record<string, unknown>
+            if (typeof original === 'string' && typeof corrected === 'string' && original.trim() && corrected.trim()) {
+              const explanation = (item as Record<string, unknown>).explanation
+              corrections.push({
+                original: original.trim(),
+                corrected: corrected.trim(),
+                explanation: typeof explanation === 'string' ? explanation.trim() : '',
+              })
+            }
+          }
+          return { corrections, method: 'json' }
+        }
+      }
+    }
+  }
+  // regex fallback over the raw text
+  const corrections: Correction[] = []
+  for (const m of raw.matchAll(CORRECTION_RE)) {
+    const orig = unescapeQuoted(m[1])
+    const corr = unescapeQuoted(m[2])
+    const expl = m[3] ? unescapeQuoted(m[3]) : ''
+    if (orig !== null && corr !== null && orig.trim() && corr.trim() && orig !== corr) {
+      corrections.push({ original: orig, corrected: corr, explanation: expl ?? '' })
+    }
+    if (corrections.length >= 10) break
+  }
+  if (corrections.length > 0) return { corrections, method: 'regex' }
+  return { corrections: [], method: 'fail' }
 }
 
 export interface TranslationPair {

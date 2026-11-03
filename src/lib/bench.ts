@@ -8,7 +8,16 @@
 import pkg from '../../package.json'
 import { llmEngine, llmModelByKey, type LoadProgress } from './llm'
 import { parseTutorReply, parseTranslationJson, filterCorrections } from './parse'
-import { buildTutorMessages, buildTranslateMessages, buildVocabMessages, type LlmMessage } from '../prompts'
+import {
+  buildTutorMessages,
+  buildTutorMessagesSimple,
+  buildCorrectionsMessages,
+  buildTranslateMessages,
+  buildVocabMessages,
+  type LlmMessage,
+} from '../prompts'
+import { parseCorrectionsJson } from './parse'
+import { contextWindowFor } from './llm'
 import type { Level } from '../types'
 import type { TargetLang } from './langs'
 import type { UiLang } from '../i18n'
@@ -19,8 +28,9 @@ const pkgVersions = {
   transformers: (pkg.dependencies?.['@huggingface/transformers'] ?? '?').replace(/^[^0-9]*/, ''),
 }
 
-export type TurnStage = 'tutor' | 'translation' | 'vocab' | 'turn' | 'roundtrip'
-export type ParseOutcome = 'json' | 'repaired' | 'regex' | 'plain' | 'fallback' | 'fail'
+export type TurnStage = 'tutor' | 'corrections' | 'translation' | 'vocab' | 'turn' | 'roundtrip'
+export type ParseOutcome = 'json' | 'repaired' | 'rescued' | 'regex' | 'plain' | 'fallback' | 'fail'
+export type PromptSchema = 'full' | 'tiny'
 
 /** One LLM call (or one full turn) as recorded for the benchmark */
 export interface TurnMetrics {
@@ -44,6 +54,8 @@ export interface TurnMetrics {
   correctionsKept: number | null
   /** 1-based dialog turn number (prompt grows through a session) */
   turnNo: number | null
+  /** which prompt contract produced this call */
+  schema?: PromptSchema
 }
 
 export interface LoadMetric {
@@ -71,10 +83,29 @@ export interface EnvSnapshot {
 const STORAGE_KEY = 'gt-web-bench'
 const MAX_TURNS = 300
 
+/** Context-probe run: history grows turn by turn until the model's context
+ *  budget is exhausted; rows record where TTFT/decode degrade or break */
+export interface ContextProbe {
+  ts: number
+  llmKey: string
+  modelId: string
+  contextWindow: number
+  promptBudget: number
+  rows: Array<{
+    turn: number
+    promptTokens: number | null
+    ttftMs: number | null
+    decodeTokS: number | null
+    wallMs: number | null
+    error?: string
+  }>
+}
+
 interface BenchStore {
   env: EnvSnapshot | null
   turns: TurnMetrics[]
   loads: LoadMetric[]
+  probes: ContextProbe[]
 }
 
 function readStore(): BenchStore {
@@ -82,12 +113,17 @@ function readStore(): BenchStore {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as BenchStore
-      return { env: parsed.env ?? null, turns: parsed.turns ?? [], loads: parsed.loads ?? [] }
+      return {
+        env: parsed.env ?? null,
+        turns: parsed.turns ?? [],
+        loads: parsed.loads ?? [],
+        probes: parsed.probes ?? [],
+      }
     }
   } catch {
     /* corrupted storage — start fresh */
   }
-  return { env: null, turns: [], loads: [] }
+  return { env: null, turns: [], loads: [], probes: [] }
 }
 
 function writeStore(store: BenchStore): void {
@@ -99,6 +135,17 @@ export function recordTurn(m: Omit<TurnMetrics, 'ts'>): void {
   store.turns.push({ ...m, ts: Date.now() })
   if (store.turns.length > MAX_TURNS) store.turns = store.turns.slice(-MAX_TURNS)
   writeStore(store)
+}
+
+export function recordProbe(p: Omit<ContextProbe, 'ts'>): void {
+  const store = readStore()
+  store.probes.push({ ...p, ts: Date.now() })
+  store.probes = store.probes.slice(-10)
+  writeStore(store)
+}
+
+export function allProbes(): ContextProbe[] {
+  return readStore().probes
 }
 
 export function recordLoad(m: Omit<LoadMetric, 'ts'>): void {
@@ -117,7 +164,7 @@ export function allLoads(): LoadMetric[] {
 }
 
 export function clearBench(): void {
-  writeStore({ env: getEnv(), turns: [], loads: [] })
+  writeStore({ env: getEnv(), turns: [], loads: [], probes: [] })
 }
 
 export function getEnv(): EnvSnapshot | null {
@@ -181,6 +228,7 @@ export async function snapshotEnv(): Promise<EnvSnapshot> {
 export interface ModelAggregate {
   llmKey: string
   modelId: string
+  schema: PromptSchema
   turns: number
   decodeTokS: number | null
   ttftMs: number | null
@@ -195,21 +243,26 @@ function mean(xs: number[]): number | null {
   return xs.reduce((a, b) => a + b, 0) / xs.length
 }
 
-/** Aggregate tutor-stage turns per model — the article's core table */
+const OK_PARSE: ParseOutcome[] = ['json', 'repaired', 'rescued', 'regex']
+
+/** Aggregate tutor-stage turns per model AND prompt schema — separates the
+ *  full contract from the tiny-tier contract on the same model */
 export function aggregateByModel(): ModelAggregate[] {
   const byKey = new Map<string, TurnMetrics[]>()
   for (const t of readStore().turns) {
     if (t.stage !== 'tutor') continue
-    const list = byKey.get(t.llmKey) ?? []
+    const key = `${t.llmKey}|${t.schema ?? 'full'}`
+    const list = byKey.get(key) ?? []
     list.push(t)
-    byKey.set(t.llmKey, list)
+    byKey.set(key, list)
   }
   const out: ModelAggregate[] = []
-  for (const [llmKey, turns] of byKey) {
-    const ok = turns.filter(t => t.parse === 'json' || t.parse === 'repaired' || t.parse === 'regex').length
+  for (const [key, turns] of byKey) {
+    const ok = turns.filter(t => t.parse != null && OK_PARSE.includes(t.parse)).length
     out.push({
-      llmKey,
-      modelId: turns[0]?.modelId ?? llmKey,
+      llmKey: key,
+      modelId: turns[0]?.modelId ?? key,
+      schema: turns[0]?.schema ?? 'full',
       turns: turns.length,
       decodeTokS: mean(turns.map(t => t.decodeTokS).filter((x): x is number => x != null)),
       ttftMs: mean(turns.map(t => t.ttftMs).filter((x): x is number => x != null)),
@@ -242,13 +295,42 @@ export function toMarkdown(): string {
   } else {
     lines.push('- (not captured)')
   }
-  lines.push('', '## Per-model aggregate (tutor stage, temperature as recorded)', '')
-  lines.push('| Model | Turns | Decode tok/s | TTFT ms | e2e ms | wall ms | Strict JSON ok | Corrections kept |')
-  lines.push('|---|---|---|---|---|---|---|---|')
+  lines.push('', '## Per-model aggregate (tutor stage)', '')
+  lines.push('| Model | Schema | Turns | Decode tok/s | TTFT ms | e2e ms | wall ms | Strict JSON ok | Corrections kept |')
+  lines.push('|---|---|---|---|---|---|---|---|---|')
   for (const a of aggregateByModel()) {
     lines.push(
-      `| ${a.modelId} | ${a.turns} | ${fmt(a.decodeTokS)} | ${fmt(a.ttftMs, 0)} | ${fmt(a.e2eMs, 0)} | ${fmt(a.wallMs, 0)} | ${a.jsonOkRate == null ? '—' : `${Math.round(a.jsonOkRate * 100)}%`} | ${a.correctionsKept} |`,
+      `| ${a.modelId} | ${a.schema} | ${a.turns} | ${fmt(a.decodeTokS)} | ${fmt(a.ttftMs, 0)} | ${fmt(a.e2eMs, 0)} | ${fmt(a.wallMs, 0)} | ${a.jsonOkRate == null ? '—' : `${Math.round(a.jsonOkRate * 100)}%`} | ${a.correctionsKept} |`,
     )
+  }
+  const probes = readStore().probes
+  for (const p of [...probes].reverse().slice(0, 3)) {
+    lines.push('', `## Context probe — ${p.modelId} (window ${p.contextWindow}, prompt budget ${p.promptBudget})`, '')
+    lines.push('| Turn | Prompt tokens | TTFT ms | Decode tok/s | wall ms | Note |')
+    lines.push('|---|---|---|---|---|---|')
+    for (const r of p.rows) {
+      lines.push(
+        `| ${r.turn} | ${r.promptTokens ?? '—'} | ${fmt(r.ttftMs, 0)} | ${fmt(r.decodeTokS)} | ${r.wallMs ?? '—'} | ${r.error ? r.error.slice(0, 60) : ''} |`,
+      )
+    }
+    const ok = p.rows.filter(r => !r.error)
+    if (ok.length > 2) {
+      const first = ok.slice(0, 3)
+      const baseDecode = mean(first.map(r => r.decodeTokS).filter((x): x is number => x != null))
+      const baseTtft = mean(first.map(r => r.ttftMs).filter((x): x is number => x != null))
+      const knee = ok.find(
+        r =>
+          (baseDecode != null && r.decodeTokS != null && r.decodeTokS < baseDecode * 0.75) ||
+          (baseTtft != null && r.ttftMs != null && r.ttftMs > baseTtft * 2),
+      )
+      const lastOk = ok[ok.length - 1]
+      lines.push(
+        '',
+        knee
+          ? `Stable through ~${knee.turn - 1} turns; degradation at turn ${knee.turn} (decode ${fmt(knee.decodeTokS)} vs ${fmt(baseDecode)} baseline, TTFT ${fmt(knee.ttftMs, 0)} vs ${fmt(baseTtft, 0)}).`
+          : `No knee within ${ok.length} turns; last turn at ${lastOk.promptTokens ?? '?'} prompt tokens still stable (decode ${fmt(lastOk.decodeTokS)}, TTFT ${fmt(lastOk.ttftMs, 0)}).`,
+      )
+    }
   }
   lines.push('', '## Model loads', '')
   lines.push('| Kind | Model | ms | Files from |')
@@ -335,13 +417,44 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
     for (let ti = 0; ti < BENCH_SCRIPT.length; ti++) {
       const step = BENCH_SCRIPT[ti]
       onProgress({ phase: 'turn', modelKey: key, modelIndex: mi, modelCount: modelKeys.length, turnIndex: ti, turnCount: BENCH_SCRIPT.length, text: step.text })
-      // ---- tutor call (same builders as production) ----
-      const messages = buildTutorMessages(history, step.text, step.level, targetLang, uiLang, '')
+      // ---- tutor call: tiny models use the 2-key contract (like production) ----
+      const messages = option.tiny
+        ? buildTutorMessagesSimple(history, step.text, step.level, targetLang, uiLang, '')
+        : buildTutorMessages(history, step.text, step.level, targetLang, uiLang, '')
       const t0 = performance.now()
       const tutor = await llmEngine.chat(messages, { temperature: 0 })
       const wallTutor = Math.round(performance.now() - t0)
       const parsed = parseTutorReply(tutor.text)
-      const kept = filterCorrections(parsed.corrections, step.text)
+      let corrections = parsed.corrections
+      if (option.tiny) {
+        // tiny tier: corrections via the separate single-key call
+        const corr = await llmEngine.chat(buildCorrectionsMessages(targetLang, uiLang, step.text), {
+          temperature: 0.2,
+          maxTokens: 400,
+        })
+        const corrParsed = parseCorrectionsJson(corr.text)
+        corrections = corrParsed.corrections
+        recordTurn({
+          stage: 'corrections',
+          llmKey: key,
+          modelId: option.modelId,
+          device: llmEngine.deviceLabel,
+          temperature: 0.2,
+          promptTokens: corr.perf?.promptTokens ?? null,
+          completionTokens: corr.perf?.completionTokens ?? null,
+          ttftMs: corr.perf?.ttftMs ?? null,
+          prefillTokS: corr.perf?.prefillTokS ?? null,
+          decodeTokS: corr.perf?.decodeTokS ?? null,
+          e2eMs: corr.perf?.e2eMs ?? null,
+          wallMs: null,
+          parse: corrParsed.method === 'fail' ? 'fail' : corrParsed.method,
+          correctionsRaw: corrParsed.corrections.length,
+          correctionsKept: null,
+          turnNo: null,
+          schema: 'tiny',
+        })
+      }
+      const kept = filterCorrections(corrections, step.text)
       recordTurn({
         stage: 'tutor',
         llmKey: key,
@@ -356,9 +469,10 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
         e2eMs: tutor.perf?.e2eMs ?? null,
         wallMs: wallTutor,
         parse: parsed.method,
-        correctionsRaw: parsed.corrections.length,
+        correctionsRaw: corrections.length,
         correctionsKept: kept.length,
         turnNo: ti + 1,
+        schema: option.tiny ? 'tiny' : 'full',
       })
       // ---- translation call (production pattern: second call, temp 0.2) ----
       const trMessages = buildTranslateMessages(targetLang, uiLang, step.text, parsed.reply)
@@ -425,4 +539,115 @@ export async function runBenchmark(opts: RunBenchOptions): Promise<void> {
     await llmEngine.ensure(originalKey, () => undefined)
   }
   onProgress({ phase: 'done', modelKey: '', modelIndex: modelKeys.length, modelCount: modelKeys.length, turnIndex: 0, turnCount: 0, text: 'done' })
+}
+
+// ---------- context probe ----------
+
+/** Short filler lines for the probe: keeps per-turn output compact while the
+ *  prompt grows, so TTFT/decode degradation comes from context, not answers */
+const PROBE_LINES = [
+  'Erzähl mir bitte mehr davon.',
+  'Das klingt interessant, weiter bitte.',
+  'Und was hast du dann gemacht?',
+  'Wirklich? Erzähl weiter.',
+  'Ich verstehe. Was kam danach?',
+]
+
+/**
+ * Grow a dialog on one model until the context budget is exhausted: fixed
+ * user lines, real prompts, per-turn TTFT/decode recorded; the row where the
+ * engine refuses (prompt over budget) closes the probe. Feeds the auto-trim
+ * budget and the article's context section.
+ */
+export async function runContextProbe(opts: {
+  modelKey: string
+  targetLang: TargetLang
+  uiLang: UiLang
+  maxTurns?: number
+  onProgress: (p: BenchRunProgress) => void
+}): Promise<ContextProbe | null> {
+  const { modelKey, targetLang, uiLang, onProgress } = opts
+  const maxTurns = opts.maxTurns ?? 24
+  const option = llmModelByKey(modelKey)
+  const { window: ctxWindow, promptBudget } = contextWindowFor(modelKey)
+  const originalKey = llmEngine.loadedKey
+  let sawNetwork = false
+  onProgress({ phase: 'load', modelKey, modelIndex: 0, modelCount: 1, turnIndex: 0, turnCount: 0, text: `loading ${option.modelId}` })
+  const tLoad = performance.now()
+  await llmEngine.ensure(modelKey, (p: LoadProgress) => {
+    if (!sawNetwork && /fetch|download|\d+% of/i.test(p.text) && !/cache/i.test(p.text)) sawNetwork = true
+    onProgress({ phase: 'load', modelKey, modelIndex: 0, modelCount: 1, turnIndex: 0, turnCount: 0, text: p.text.slice(0, 120) })
+  })
+  recordLoad({
+    kind: 'llm',
+    model: option.modelId,
+    ms: Math.round(performance.now() - tLoad),
+    source: sawNetwork ? 'network' : 'cache',
+  })
+
+  const probe: Omit<ContextProbe, 'ts'> = {
+    llmKey: modelKey,
+    modelId: option.modelId,
+    contextWindow: ctxWindow,
+    promptBudget,
+    rows: [],
+  }
+  const history: LlmMessage[] = []
+  for (let turn = 1; turn <= maxTurns; turn++) {
+    const line = PROBE_LINES[(turn - 1) % PROBE_LINES.length]
+    onProgress({ phase: 'turn', modelKey, modelIndex: 0, modelCount: 1, turnIndex: turn - 1, turnCount: maxTurns, text: `turn ${turn}` })
+    const messages = option.tiny
+      ? buildTutorMessagesSimple(history, line, 'A2', targetLang, uiLang, '')
+      : buildTutorMessages(history, line, 'A2', targetLang, uiLang, '')
+    const t0 = performance.now()
+    try {
+      const call = await llmEngine.chat(messages, { temperature: 0, maxTokens: 250 })
+      const row = {
+        turn,
+        promptTokens: call.perf?.promptTokens ?? null,
+        ttftMs: call.perf?.ttftMs ?? null,
+        decodeTokS: call.perf?.decodeTokS ?? null,
+        wallMs: Math.round(performance.now() - t0),
+      }
+      probe.rows.push(row)
+      recordTurn({
+        stage: 'tutor',
+        llmKey: modelKey,
+        modelId: option.modelId,
+        device: llmEngine.deviceLabel,
+        temperature: 0,
+        promptTokens: row.promptTokens,
+        completionTokens: null,
+        ttftMs: row.ttftMs,
+        prefillTokS: call.perf?.prefillTokS ?? null,
+        decodeTokS: row.decodeTokS,
+        e2eMs: call.perf?.e2eMs ?? null,
+        wallMs: row.wallMs,
+        parse: parseTutorReply(call.text).method,
+        correctionsRaw: null,
+        correctionsKept: null,
+        turnNo: turn,
+        schema: option.tiny ? 'tiny' : 'full',
+      })
+      const assistantText = parseTutorReply(call.text).reply
+      history.push({ role: 'user', content: line }, { role: 'assistant', content: assistantText || line })
+    } catch (err) {
+      probe.rows.push({
+        turn,
+        promptTokens: null,
+        ttftMs: null,
+        decodeTokS: null,
+        wallMs: Math.round(performance.now() - t0),
+        error: err instanceof Error ? err.message : String(err),
+      })
+      break
+    }
+  }
+  recordProbe(probe)
+  if (originalKey != null && originalKey !== modelKey) {
+    onProgress({ phase: 'restore', modelKey: originalKey, modelIndex: 1, modelCount: 1, turnIndex: 0, turnCount: 0, text: 'restoring' })
+    await llmEngine.ensure(originalKey, () => undefined)
+  }
+  onProgress({ phase: 'done', modelKey, modelIndex: 1, modelCount: 1, turnIndex: 0, turnCount: 0, text: 'done' })
+  return { ...probe, ts: Date.now() }
 }

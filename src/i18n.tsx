@@ -158,6 +158,7 @@ const RU: Dict = {
 
   // Bench tab
   tabBench: 'Bench',
+  showBenchTab: 'Показывать вкладку Bench',
   benchTitle: 'Бенчмарк WebLLM',
   benchEnvTitle: 'Окружение',
   benchEnvHint: 'Снимок делается при открытии вкладки',
@@ -186,6 +187,11 @@ const RU: Dict = {
   benchClear: 'Очистить',
   benchCopied: 'Скопировано в буфер',
   benchEmpty: 'Пока нет данных — прогони бенчмарк или просто поговори с тьютором',
+  benchProbe: 'Контекст-проба',
+  benchProbeHint: 'Растит диалог на первой отмеченной модели до упора в контекст',
+  benchProbeTitle: 'Контекст-проба (последняя)',
+  benchColTurn: 'Ход',
+  benchColPromptTok: 'Промпт, ток',
 }
 
 const EN: Dict = {
@@ -328,6 +334,7 @@ const EN: Dict = {
 
   // Bench tab
   tabBench: 'Bench',
+  showBenchTab: 'Show the Bench tab',
   benchTitle: 'WebLLM benchmark',
   benchEnvTitle: 'Environment',
   benchEnvHint: 'Captured when the tab opens',
@@ -356,6 +363,11 @@ const EN: Dict = {
   benchClear: 'Clear',
   benchCopied: 'Copied to clipboard',
   benchEmpty: 'No data yet — run the benchmark or just talk to the tutor',
+  benchProbe: 'Context probe',
+  benchProbeHint: 'Grows a dialog on the first checked model until it hits the context limit',
+  benchProbeTitle: 'Context probe (latest)',
+  benchColTurn: 'Turn',
+  benchColPromptTok: 'Prompt tok',
 }
 
 export const STRINGS: Record<UiLang, Dict> = { ru: RU, en: EN }

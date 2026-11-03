@@ -96,3 +96,45 @@ translation 1.8 s · Phonon TTS to first sound 81 ms · total 5.6 s.
 
 See `toJSON()` export of the Bench tab (localStorage `gt-web-bench`) for every
 recorded call; the table above is its aggregate.
+
+---
+
+# Run 2 — tiny-tier architecture (same day)
+
+Same script, same machine; two changes: (a) the parser now rescues JSON from
+`<think>`-wrapped truncated output, (b) models flagged `tiny` (≤1B) run a
+2-key tutor schema (`reply` + `suggestions`) with corrections moved to their
+own single-key call.
+
+## Per-model aggregate — full vs tiny contract on the same models
+
+| Model | Schema | Turns | Decode tok/s | TTFT ms | wall ms | Strict JSON ok | Corrections kept |
+|---|---|---|---|---|---|---|---|
+| Qwen3-0.6B | **tiny** | 32 | 56.0 | 427 | **2119** | **97%** | 2 |
+| Qwen3-0.6B | full | 8 | 49.9 | 630 | 5738 | 0% | 0 |
+| gemma3-1b | **tiny** | 8 | 33.3 | 373 | 1211 | 25% | 1 |
+| gemma3-1b | full | 8 | 27.6 | 963 | 2244 | 13% | 0 |
+| Qwen3-1.7B | full | 32 | 39.2 | 1617 | 2680 | 16% | 0 |
+
+Headline: the smallest model goes from 0% compliance and the slowest walls to
+97% compliance and the fastest walls of the whole lineup — purely by shrinking
+the output contract and rescuing think-wrapped JSON.
+
+## Context probes (window 4096, prompt budget 2940)
+
+Qwen3-1.7B, full schema, 24 turns (prompt 463 → 1229 tokens):
+
+| Turn | Prompt tok | TTFT ms | Decode tok/s |
+|---|---|---|---|
+| 1 | 463 | 969 | 44.0 |
+| 8 | 695 | 1329 | 42.5 |
+| 15 | 930 | 1923 | 39.8 |
+| 24 | 1229 | 2622 | 36.7 |
+
+TTFT grows linearly (~1.6 ms per prompt token); decode drops 17% over the
+run; knee detection marks turn 15. No hard failure — 24 short turns stay well
+under the 4096-token cap the prebuilt build enforces.
+
+Qwen3-0.6B, tiny schema, 24 turns (prompt 163 → 862 tokens): TTFT 226 → 883 ms,
+decode stable at ~60 tok/s. Note the tiny system prompt is 3× smaller
+(163 vs 463 tokens at turn 1) — the tiny contract also cuts prefill.
