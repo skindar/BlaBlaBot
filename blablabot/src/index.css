@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Inter:Medium';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Inter:Regular';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Inter:Semi Bold';
+  src: url('https://static.figma.com/font/Inter_1') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+}
+
+@layer base {
+  html {
+    background: #faf9f6;
+  }
+
+  body {
+    min-width: 320px;
+    margin: 0;
+    font-family: 'Inter:Regular', Inter, sans-serif;
+    color: #292e2a;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #526f60;
+    outline-offset: 2px;
+  }
+}
+
+@theme {
+  --font-sans: 'Inter:Regular', Inter, sans-serif;
+}
+
+@layer utilities {
+  .font-medium {
+    font-family: 'Inter:Medium', Inter, sans-serif;
+  }
+
+  .font-semibold {
+    font-family: 'Inter:Semi Bold', Inter, sans-serif;
+  }
+}

@@ -426,6 +426,16 @@ export const diary = {
     return true
   },
 
+  /** Background auto-refine landed for one entry */
+  patchRefined(uid: string, refined: string): void {
+    const entries = readJson<DiaryEntry[]>(DIARY_KEY, [])
+    const entry = entries.find(e => e.uid === uid)
+    if (!entry || !refined) return
+    entry.refined = refined
+    writeJson(DIARY_KEY, entries)
+    fireDirty('diary', entry.lang)
+  },
+
   /** Replace all entries (Drive sync merge) */
   replaceAll(entries: DiaryEntry[]): void {
     writeJson(DIARY_KEY, entries)
@@ -440,6 +450,43 @@ export const diary = {
   },
   setState(lang: TargetLang, state: { qIdx: number }): void {
     writeJson(DIARY_STATE_KEY_PREFIX + lang, state)
+  },
+}
+
+// ---------- Diary refined pages (LLM-polished day summaries) ----------
+
+const DIARY_REFINED_KEY = 'gt-web-diary-refined'
+
+/** One polished diary page per (language, date) — the "refined" view */
+export interface DiaryRefined {
+  lang: TargetLang
+  /** YYYY-MM-DD */
+  date: string
+  /** coherent diary text in the target language */
+  text: string
+  /** UI-language translation ('' when it could not be produced) */
+  translation: string
+  updated_at: string
+}
+
+export const diaryRefined = {
+  get(lang: TargetLang, date: string): DiaryRefined | null {
+    const all = readJson<DiaryRefined[]>(DIARY_REFINED_KEY, [])
+    return all.find(r => r.lang === lang && r.date === date) ?? null
+  },
+
+  save(lang: TargetLang, date: string, text: string, translation: string): void {
+    const all = readJson<DiaryRefined[]>(DIARY_REFINED_KEY, [])
+    const next = all.filter(r => !(r.lang === lang && r.date === date))
+    next.push({ lang, date, text, translation, updated_at: new Date().toISOString() })
+    writeJson(DIARY_REFINED_KEY, next)
+  },
+
+  /** Drop pages that no longer have raw entries for their date */
+  prune(lang: TargetLang, dates: Set<string>): void {
+    const all = readJson<DiaryRefined[]>(DIARY_REFINED_KEY, [])
+    const next = all.filter(r => r.lang !== lang || dates.has(r.date))
+    if (next.length !== all.length) writeJson(DIARY_REFINED_KEY, next)
   },
 }
 

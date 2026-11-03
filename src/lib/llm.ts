@@ -20,7 +20,7 @@ export interface LlmModelOption {
 /** Curated model list; filtered against the installed web-llm prebuilt
  *  list. Note the Gemma-3 ID: "gemma3-1b-it…" (no hyphen in "gemma3"). */
 const MODEL_CANDIDATES: LlmModelOption[] = [
-  { key: 'gemma-3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B-IT 🌐 (Лучшая мультиязычная сбалансированная)', size: '', tiny: true },
+  { key: 'gemma-3-1b', modelId: 'gemma3-1b-it-q4f16_1-MLC', label: 'Gemma-3-1B-IT 🌐', size: '', tiny: true },
   { key: 'llama-3.2-1b', modelId: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Llama-3.2-1B-Instruct', size: '', tiny: true },
   { key: 'qwen2.5-1.5b', modelId: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5-1.5B-Instruct', size: '' },
   { key: 'gemma-4-e2b', modelId: 'gemma-4-E2B-it-q4f16_1-MLC', label: 'Gemma-4 E2B', size: '' },

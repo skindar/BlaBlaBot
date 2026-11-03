@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // Browser version: no proxy to the Python backend — all ML runs inside the tab.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   // GitHub Pages project sites live at https://<owner>.github.io/<repo>/ —
   // relative asset paths work there and on a custom domain alike
   base: './',

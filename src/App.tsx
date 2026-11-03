@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BenchView } from './components/BenchView'
 import { DiaryView } from './components/DiaryView'
 import { FlashcardsView } from './components/FlashcardsView'
+import { InputCard } from './components/InputCard'
 import { MessageList } from './components/MessageList'
 import { OnboardingModal } from './components/OnboardingModal'
-import { PushToTalkButton } from './components/PushToTalkButton'
+import { RightPanel } from './components/RightPanel'
 import { SettingsModal } from './components/SettingsModal'
-import { Sidebar } from './components/Sidebar'
-import { StatusBar } from './components/StatusBar'
+import { Sidebar, type NavTab } from './components/Sidebar'
 import { useRecorder } from './hooks/useRecorder'
 import { useEngine } from './hooks/useEngine'
 import {
@@ -22,10 +22,12 @@ import {
 } from './lib/engine'
 import { DEFAULT_ASR_KEY } from './lib/asr'
 import { DEFAULT_LLM_KEY, availableLlmModels } from './lib/llm'
-import { langInfo, resolvePhononVoice } from './lib/langs'
+import { TARGET_LANG_LIST, langInfo, resolvePhononVoice } from './lib/langs'
 import { conversation, onboarding } from './lib/store'
+import { getSyncStatus, subscribeSync } from './lib/sync'
 import { configureSync, initSyncEvents } from './lib/sync'
 import { I18nProvider, makeT, setLibLang, type UiLang } from './i18n'
+import { BotMark, Icon, SageButton } from './ui/design'
 import type { TargetLang } from './lib/langs'
 import type { ChatMessage, ChatResponse, Settings, Stage } from './types'
 
@@ -49,6 +51,7 @@ function defaultSettings(): Settings {
     phononBases: {},
     ttsSpeed: 1,
     showTranslation: true,
+    handsFree: true,
     extraPrompt: '',
     googleClientId: '',
     driveAutoSync: true,
@@ -107,12 +110,25 @@ function AppInner() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [timings, setTimings] = useState<Record<string, number> | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'chat' | 'cards' | 'diary' | 'bench'>('chat')
+  const [tab, setTab] = useState<NavTab>('conversation')
   const [selection, setSelection] = useState<{ word: string; x: number; y: number } | null>(null)
   const [vocabToast, setVocabToast] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [needsOnboarding, setNeedsOnboarding] = useState(() => !onboarding.done())
+  // Google Drive sign-in gates the diary: no account — no diary mode/tab
+  const [googleSignedIn, setGoogleSignedIn] = useState(() => getSyncStatus().signedIn)
+  // hands-free mic: auto-submit after this much silence
+  const HANDS_FREE_PAUSE_MS = 5000
   const speakingRef = useRef(false)
+  const prevStageRef = useRef<Stage>('idle')
+  /** the user pressed "⏹ Стоп" — keep the mic closed even after the next reply */
+  const sessionStopRef = useRef(false)
+  // design UI state
+  const [rightPanel, setRightPanel] = useState(true)
+  const [languageOpen, setLanguageOpen] = useState(false)
+  const [typing, setTyping] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [ended, setEnded] = useState(false)
 
   const t = useMemo(() => makeT(settings.uiLang), [settings.uiLang])
   const lang = settings.targetLang
@@ -140,6 +156,18 @@ function AppInner() {
     })
   }, [])
 
+  useEffect(() => subscribeSync(st => setGoogleSignedIn(st.signedIn)), [])
+
+  // sign-out mid-diary: the mode and the tab cannot stay on
+  useEffect(() => {
+    if (!googleSignedIn && settings.diaryMode) updateSettings({ diaryMode: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleSignedIn])
+  useEffect(() => {
+    if (!googleSignedIn && tab === 'diary') setTab('conversation')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleSignedIn])
+
   // UI language: library strings + html lang
   useEffect(() => {
     setLibLang(settings.uiLang)
@@ -154,26 +182,13 @@ function AppInner() {
     configureSync({ clientId: settings.googleClientId, autoSync: settings.driveAutoSync })
   }, [settings.googleClientId, settings.driveAutoSync])
 
-  // Theme: data-theme on <html>; "system" follows prefers-color-scheme
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = () => {
-      const dark =
-        settings.theme === 'dark' || (settings.theme === 'system' && media.matches)
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-    }
-    apply()
-    if (settings.theme !== 'system') return
-    media.addEventListener('change', apply)
-    return () => media.removeEventListener('change', apply)
-  }, [settings.theme])
-
   // Current-language history from localStorage (analog of GET /api/history)
   useEffect(() => {
     setMessages(
       conversation.recent(lang).map(m => ({
         id: `db-${m.id}`,
         role: m.role,
+        createdAt: Date.parse(m.created_at) || undefined,
         text: m.text,
         userTranslation: m.user_translation || undefined,
         corrections: m.corrections ?? undefined,
@@ -190,7 +205,7 @@ function AppInner() {
     return () => window.clearTimeout(timer)
   }, [error])
 
-  // The status bar reflects model readiness
+  // The status line reflects model readiness
   useEffect(() => {
     if (stage !== 'idle') return
     if (health.ready) {
@@ -255,10 +270,11 @@ function AppInner() {
         const stamp = Date.now()
         setMessages(prev => [
           ...prev,
-          { id: `u-${stamp}`, role: 'user', text: data.user_text, userTranslation: data.user_translation },
+          { id: `u-${stamp}`, role: 'user', text: data.user_text, userTranslation: data.user_translation, createdAt: stamp },
           {
             id: `t-${stamp}`,
             role: 'tutor',
+            createdAt: stamp,
             text: data.reply,
             corrections: data.corrections,
             translation: data.translation,
@@ -294,6 +310,28 @@ function AppInner() {
     [sendChat],
   )
 
+  // Hands-free loop: when the tutor finishes speaking, the mic opens again
+  // by itself — the conversation keeps flowing without touching anything.
+  // Only after a clean turn (reply played/processed), on the conversation tab,
+  // without an error — and it can be ended by simply staying silent.
+  useEffect(() => {
+    const prev = prevStageRef.current
+    prevStageRef.current = stage
+    if (!settings.handsFree) return
+    if (stage !== 'idle' || tab !== 'conversation') return
+    if (error) return
+    if (sessionStopRef.current) return
+    if (prev !== 'processing' && prev !== 'playing') return
+    void recorder.start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, settings.handsFree, tab])
+
+  // Turning hands-free off while it listens: close the mic, discard
+  useEffect(() => {
+    if (!settings.handsFree && recorder.state === 'recording') recorder.cancel()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.handsFree])
+
   const handleText = useCallback(
     (text: string) => {
       if (stage !== 'idle') return
@@ -302,7 +340,10 @@ function AppInner() {
     [sendChat, stage],
   )
 
-  const recorder = useRecorder(handleBlob)
+  // hands-free mic: auto-submit after a short silence pause
+  const recorder = useRecorder(handleBlob, {
+    autoStopOnSilenceMs: settings.handsFree ? HANDS_FREE_PAUSE_MS : undefined,
+  })
 
   const prevRecorderState = useRef(recorder.state)
   useEffect(() => {
@@ -320,9 +361,20 @@ function AppInner() {
 
   const startRecording = useCallback(() => {
     setError(null)
+    sessionStopRef.current = false
     cancelSpeech()
     if (stage === 'idle' || stage === 'playing') recorder.start()
   }, [recorder, stage])
+
+  /** Hands-free "⏹ Стоп": discard the current recording and end the loop —
+   *  no submission, no reply, the mic stays closed */
+  const endHandsFreeSession = useCallback(() => {
+    sessionStopRef.current = true
+    cancelSpeech()
+    if (recorder.state === 'recording') recorder.cancel()
+    setStage('idle')
+    setStatusText(t('readyToTalk'))
+  }, [recorder, t])
 
   const speakWord = useCallback(
     (text: string) => {
@@ -374,6 +426,14 @@ function AppInner() {
     setStatusText(t('newDialogStarted'))
   }, [lang, t])
 
+  /** "End session" (the design): stop the mic, close the conversation,
+   *  show the farewell card */
+  const endSession = useCallback(() => {
+    endHandsFreeSession()
+    resetDialog()
+    setEnded(true)
+  }, [endHandsFreeSession, resetDialog])
+
   const finishOnboarding = useCallback(
     (uiLang: UiLang, targetLang: TargetLang) => {
       onboarding.complete()
@@ -383,116 +443,245 @@ function AppInner() {
     [updateSettings],
   )
 
+  if (ended) {
+    return (
+      <I18nProvider lang={settings.uiLang}>
+        <main className="flex min-h-dvh items-center justify-center bg-[#faf9f6] p-6">
+          <section className="w-full max-w-md rounded-[24px] border border-[#e5e6de] bg-white p-10 text-center shadow-sm">
+            <div className="mx-auto mb-6 flex w-fit">
+              <BotMark large />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-[-0.6px] text-[#292e2a]">
+              {t('endedTitle')}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-[#737970]">{t('endedText')}</p>
+            <SageButton className="mt-7" onClick={() => setEnded(false)}>
+              {t('returnToConversation')}
+            </SageButton>
+          </section>
+        </main>
+      </I18nProvider>
+    )
+  }
+
   return (
     <I18nProvider lang={settings.uiLang}>
-      <div className="app">
+      <main className="flex min-h-dvh bg-[#faf9f6] text-[#292e2a]">
         <Sidebar
           settings={settings}
-          onChange={updateSettings}
-          health={health}
+          active={tab}
+          googleSignedIn={googleSignedIn}
+          diaryLocked={!googleSignedIn}
+          onNav={setTab}
+          onNewConversation={() => {
+            resetDialog()
+            setTab('conversation')
+          }}
           onOpenSettings={() => setSettingsOpen(true)}
         />
-        <main className="chat-pane">
-        <div className="tabs">
-          <button type="button" className={`tab${tab === 'chat' ? ' active' : ''}`} onClick={() => setTab('chat')}>
-            {t('tabChat')}
-          </button>
-          <button type="button" className={`tab${tab === 'cards' ? ' active' : ''}`} onClick={() => setTab('cards')}>
-            {t('tabCards')}
-          </button>
-          <button type="button" className={`tab${tab === 'diary' ? ' active' : ''}`} onClick={() => setTab('diary')}>
-            {t('tabDiary')}
-          </button>
-          {settings.showBench && (
-            <button type="button" className={`tab${tab === 'bench' ? ' active' : ''}`} onClick={() => setTab('bench')}>
-              {t('tabBench')}
-            </button>
-          )}
-          <button
-            type="button"
-            className="tab-btn-icon"
-            onClick={() => setSettingsOpen(true)}
-            title={t('openSettings')}
-            aria-label={t('openSettings')}
+
+        <section className="flex min-w-0 flex-1 flex-col">
+          <header className="flex min-h-24 items-center justify-between gap-3 border-b border-[#e5e6de] px-5 sm:px-8 xl:px-10">
+            <div className="min-w-0">
+              <h1 className="truncate text-[23px] font-semibold tracking-[-0.6px]">
+                {t('convTitle', { lang: langInfo(lang).nativeName })}
+              </h1>
+              <div className="mt-[7px] flex items-center gap-1.5">
+                <Icon name="dot" size={5} />
+                <p className="truncate text-xs text-[#737970]">{t('tagline2')}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-6">
+              {!rightPanel && (
+                <button
+                  aria-label={t('openPanel')}
+                  className="hidden rounded-lg border border-[#e5e6de] p-2 xl:block"
+                  onClick={() => setRightPanel(true)}
+                  type="button"
+                >
+                  <Icon name="sparkles" size={16} />
+                </button>
+              )}
+              <div className="relative">
+                <button
+                  className="flex items-center gap-2 rounded-lg border border-[#e5e6de] px-3 py-[9px] text-xs font-medium"
+                  onClick={() => setLanguageOpen(!languageOpen)}
+                  type="button"
+                >
+                  <Icon name="globe" size={16} />
+                  <span className="hidden sm:inline">{langInfo(lang).nativeName}</span>
+                  <Icon name="chevron" size={13} />
+                </button>
+                {languageOpen && (
+                  <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border border-[#e5e6de] bg-white p-1.5 text-xs shadow-lg">
+                    {TARGET_LANG_LIST.map(code => {
+                      const info = langInfo(code)
+                      return (
+                        <button
+                          className={`block w-full rounded-lg px-3 py-2 text-left hover:bg-[#f1f0eb] ${
+                            code === lang ? 'font-semibold text-[#526f60]' : ''
+                          }`}
+                          key={code}
+                          onClick={() => {
+                            updateSettings({ targetLang: code })
+                            setLanguageOpen(false)
+                          }}
+                          type="button"
+                        >
+                          {info.flag} {info.nativeName}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <button
+                className="whitespace-nowrap text-xs font-medium text-[#737970] hover:text-[#292e2a]"
+                onClick={endSession}
+                type="button"
+              >
+                {t('endSession')}
+              </button>
+            </div>
+          </header>
+
+          {/* compact navigation for small screens (the sidebar is lg+) */}
+          <nav
+            aria-label="Primary navigation"
+            className="flex gap-2 border-b border-[#e5e6de] px-5 py-2 lg:hidden"
           >
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.8" />
-              <path
-                d="M12 2.8l1.2 2.3a7 7 0 0 1 2.3.96l2.5-.7 1.7 2.9-1.9 1.8a7 7 0 0 1 0 2.68l1.9 1.8-1.7 2.9-2.5-.7a7 7 0 0 1-2.3.96L12 21.2l-1.2-2.3a7 7 0 0 1-2.3-.96l-2.5.7-1.7-2.9 1.9-1.8a7 7 0 0 1 0-2.68L4.3 9.46 6 6.56l2.5.7a7 7 0 0 1 2.3-.96L12 2.8z"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-        <StatusBar
-          stage={stage}
-          statusText={error ?? statusText}
-          isError={Boolean(error)}
-          timings={timings}
-          health={health}
-        />
-        {tab === 'chat' ? (
-          <>
-            <div className="message-list-wrap" onMouseUp={handleSelection}>
-              <MessageList
-                messages={messages}
-                showTranslation={settings.showTranslation}
-                targetLang={lang}
-                uiLang={settings.uiLang}
-                onReplay={msg => speakTutor(msg.text)}
-                onSuggest={handleText}
-              />
+            {([
+              [t('navConversation'), 'conversation'],
+              [t('navCards'), 'cards'],
+              [t('navDiary'), 'diary'],
+            ] as Array<[string, NavTab]>).map(([label, nav]) => (
+              <button
+                className={`rounded-full px-3 py-1.5 text-xs ${
+                  tab === nav ? 'bg-[#e5ece4] font-semibold text-[#526f60]' : 'text-[#737970]'
+                } ${nav === 'diary' && !googleSignedIn ? 'opacity-50' : ''}`}
+                disabled={nav === 'diary' && !googleSignedIn}
+                key={nav}
+                onClick={() => setTab(nav)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              className="ml-auto rounded-full p-1.5 text-[#737970]"
+              onClick={() => setSettingsOpen(true)}
+              type="button"
+            >
+              <Icon name="settings" size={16} />
+            </button>
+          </nav>
+
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              {tab === 'conversation' ? (
+                <>
+                  <div className="scroll-sage min-h-0 flex-1 overflow-y-auto" onMouseUp={handleSelection}>
+                    <MessageList
+                      messages={messages}
+                      showTranslation={settings.showTranslation}
+                      targetLang={lang}
+                      uiLang={settings.uiLang}
+                      onReplay={msg => speakTutor(msg.text)}
+                      onSuggest={handleText}
+                      onSavePhrase={text => void addToVocab(text)}
+                      onStartHint={text => {
+                        setDraft(text)
+                        setTyping(true)
+                      }}
+                    />
+                  </div>
+                  <InputCard
+                    timings={timings}
+                    stage={stage}
+                    statusText={statusText}
+                    error={error}
+                    recordingMs={recorder.recordingMs}
+                    handsFree={Boolean(settings.handsFree)}
+                    onToggleHandsFree={() => updateSettings({ handsFree: !settings.handsFree })}
+                    onEndSession={endHandsFreeSession}
+                    silenceMs={recorder.silenceMs}
+                    speechDetected={recorder.speechDetected}
+                    pauseLimitMs={HANDS_FREE_PAUSE_MS}
+                    typing={typing}
+                    draft={draft}
+                    setTyping={setTyping}
+                    setDraft={setDraft}
+                    onSendText={handleText}
+                    onStart={startRecording}
+                    onStop={settings.handsFree && !recorder.speechDetected ? recorder.cancel : recorder.stop}
+                    onCancel={recorder.cancel}
+                  />
+                </>
+              ) : tab === 'cards' ? (
+                <div className="scroll-sage min-h-0 flex-1 overflow-y-auto">
+                  <FlashcardsView
+                    active={tab === 'cards'}
+                    speakWord={speakWord}
+                    llmModel={settings.llmModel}
+                    targetLang={lang}
+                    uiLang={settings.uiLang}
+                  />
+                </div>
+              ) : tab === 'diary' ? (
+                <div className="scroll-sage min-h-0 flex-1 overflow-y-auto">
+                  <DiaryView
+                    active={tab === 'diary'}
+                    targetLang={lang}
+                    uiLang={settings.uiLang}
+                    level={settings.level}
+                    llmModel={settings.llmModel}
+                  />
+                </div>
+              ) : tab === 'bench' && settings.showBench ? (
+                <div className="scroll-sage min-h-0 flex-1 overflow-y-auto">
+                  <BenchView active={tab === 'bench'} targetLang={lang} uiLang={settings.uiLang} />
+                </div>
+              ) : null}
             </div>
-            <div className="ptt-area">
-              <PushToTalkButton
-                stage={stage}
-                disabled={false}
-                recordingMs={recorder.recordingMs}
-                onStart={startRecording}
-                onStop={recorder.stop}
-                onCancel={recorder.cancel}
+
+            {tab === 'conversation' && rightPanel && (
+              <RightPanel
+                settings={settings}
+                onChange={updateSettings}
+                onAddWord={word => void addToVocab(word)}
+                onClose={() => setRightPanel(false)}
               />
-              {recorder.error && <p className="recorder-error">{recorder.error}</p>}
-            </div>
-          </>
-        ) : tab === 'cards' ? (
-          <FlashcardsView
-            active={tab === 'cards'}
-            speakWord={speakWord}
-            llmModel={settings.llmModel}
-            targetLang={lang}
-            uiLang={settings.uiLang}
-          />
-        ) : tab === 'diary' ? (
-          <DiaryView active={tab === 'diary'} targetLang={lang} uiLang={settings.uiLang} />
-        ) : tab === 'bench' && settings.showBench ? (
-          <BenchView active={tab === 'bench'} targetLang={lang} uiLang={settings.uiLang} />
-        ) : null}
+            )}
+          </div>
+        </section>
+
         {selection && (
           <button
             type="button"
-            className="add-vocab-btn"
+            className="fixed z-50 -translate-x-1/2 rounded-full bg-[#526f60] px-4 py-2 text-xs text-white shadow-lg"
             style={{ left: selection.x, top: selection.y }}
             onClick={() => void addToVocab(selection.word)}
           >
             {t('addToVocab')}
           </button>
         )}
-        {vocabToast && <div className="vocab-toast">{vocabToast}</div>}
+        {vocabToast && (
+          <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#292e2a] px-5 py-2.5 text-xs text-white shadow-lg">
+            {vocabToast}
+          </div>
+        )}
+
+        {settingsOpen && (
+          <SettingsModal
+            settings={settings}
+            onChange={updateSettings}
+            health={health}
+            onClose={() => setSettingsOpen(false)}
+            onReset={resetDialog}
+          />
+        )}
+        {needsOnboarding && <OnboardingModal initialUiLang={settings.uiLang} onDone={finishOnboarding} />}
       </main>
-      {settingsOpen && (
-        <SettingsModal
-          settings={settings}
-          onChange={updateSettings}
-          health={health}
-          onClose={() => setSettingsOpen(false)}
-          onReset={resetDialog}
-        />
-      )}
-      {needsOnboarding && <OnboardingModal initialUiLang={settings.uiLang} onDone={finishOnboarding} />}
-      </div>
     </I18nProvider>
   )
 }

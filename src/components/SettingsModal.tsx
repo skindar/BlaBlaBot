@@ -1,9 +1,9 @@
-// Settings modal: every app setting in one place —
-// general, speech, models, tutor. The conversation topic and extra
-// tutor context live in the Sidebar ("Let's talk about…").
+// Settings modal in the design's language: sections in white cards with
+// sage accents. Everything is functional (models, speech, tutor, Drive).
+// The single visual theme is fixed by the design — no theme switcher.
 
 import { useEffect, useState } from 'react'
-import type { Level, ModelHealth, Settings, ThemeMode, WebHealth, WebModelHealth } from '../types'
+import type { Level, Settings, WebHealth } from '../types'
 import type { UiLang } from '../i18n'
 import { useI18n } from '../i18n'
 import { TARGET_LANG_LIST, langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
@@ -29,11 +29,9 @@ interface Props {
 
 const LEVELS: Level[] = ['A1', 'A2', 'B1', 'B2']
 
-function dotClass(model: ModelHealth | undefined): string {
-  if (model?.state === 'ready') return 'ready'
-  if (model?.state === 'error') return 'offline'
-  return 'loading'
-}
+const inputCls =
+  'w-full rounded-xl border border-[#e5e6de] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#526f60]'
+const labelCls = 'block text-[11px] font-semibold tracking-[0.8px] text-[#94988f] uppercase'
 
 /** Google Drive sign-in + sync controls (the sync module holds the state) */
 function SyncControls({
@@ -57,56 +55,67 @@ function SyncControls({
 
   return (
     <>
-      <div className="group row">
-        <input
-          id="set-drive-autosync"
-          type="checkbox"
-          checked={settings.driveAutoSync}
-          disabled={!sync.signedIn}
-          onChange={e => onChange({ driveAutoSync: e.target.checked })}
-        />
-        <label htmlFor="set-drive-autosync">{t('syncAuto')}</label>
-      </div>
-      {sync.signedIn ? (
-        <div className="group sync-status">
-          <span className="sync-line">
-            {sync.syncing
-              ? t('syncSyncing')
-              : t('syncSignedInAs', { email: sync.email ?? '' })}
-          </span>
-          <button type="button" className="card-btn" onClick={() => void syncNow()} disabled={sync.syncing}>
-            {t('syncNow')}
-          </button>
-          <button type="button" className="reset-btn" onClick={doSignOut}>
-            {t('syncSignOut')}
-          </button>
-        </div>
-      ) : (
-        <div className="group sync-status">
+      <label className={labelCls} htmlFor="set-drive-autosync">
+        {t('syncAuto')}
+      </label>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <label className="flex items-center gap-2.5 text-sm" htmlFor="set-drive-autosync">
           <button
+            aria-checked={settings.driveAutoSync}
+            aria-labelledby="set-drive-autosync"
+            className={`flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-0.5 transition-colors ${
+              settings.driveAutoSync ? 'justify-end bg-[#526f60]' : 'justify-start bg-[#e5e6de]'
+            }`}
+            disabled={!sync.signedIn}
+            id="set-drive-autosync"
+            onClick={() => onChange({ driveAutoSync: !settings.driveAutoSync })}
+            role="switch"
             type="button"
-            className="card-btn primary"
-            onClick={signIn}
-            disabled={!settings.googleClientId || sync.syncing}
           >
-            {t('syncSignIn')}
+            <span className="size-4 rounded-full bg-white" />
           </button>
+        </label>
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5">
+          {sync.signedIn ? (
+            <>
+              <span className="min-w-0 truncate text-xs text-[#737970]">
+                {sync.syncing ? t('syncSyncing') : t('syncSignedInAs', { email: sync.email ?? '' })}
+              </span>
+              <button
+                className="rounded-full border border-[#e5e6de] px-4 py-1.5 text-xs hover:border-[#526f60]"
+                disabled={sync.syncing}
+                onClick={() => void syncNow()}
+                type="button"
+              >
+                {t('syncNow')}
+              </button>
+              <button
+                className="rounded-full px-3 py-1.5 text-xs text-[#9c625c] hover:bg-[#faf3f2]"
+                onClick={doSignOut}
+                type="button"
+              >
+                {t('syncSignOut')}
+              </button>
+            </>
+          ) : (
+            <button
+              className="rounded-full bg-[#526f60] px-5 py-2.5 text-xs text-white hover:bg-[#466052] disabled:opacity-40"
+              disabled={!settings.googleClientId || sync.syncing}
+              onClick={signIn}
+              type="button"
+            >
+              {t('syncSignIn')}
+            </button>
+          )}
         </div>
+      </div>
+      {sync.error && (
+        <p className="mt-2 text-xs leading-relaxed text-[#9c625c]">
+          {t('syncError', { error: sync.error })}
+        </p>
       )}
-      {sync.error && <p className="offline-note">{t('syncError', { error: sync.error })}</p>}
     </>
   )
-}
-
-function modelStatus(model: WebModelHealth | undefined, t: (k: string) => string): string {
-  if (!model) return t('modelIdle')
-  if (model.state === 'ready') return model.progressText || t('modelReady')
-  if (model.state === 'error') return model.error.slice(0, 120) || t('modelError')
-  if (model.state === 'loading') {
-    const pct = typeof model.progress === 'number' && model.progress > 0 ? ` ${Math.round(model.progress * 100)}%` : ''
-    return `${t('modelLoading')}${pct}`
-  }
-  return t('modelIdle')
 }
 
 export function SettingsModal({ settings, onChange, health, onClose, onReset }: Props) {
@@ -133,46 +142,61 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
     return () => {
       cancelled = true
     }
-  }, [settings.ttsEngine, lang, health, t])
+  }, [settings.ttsEngine, lang, t])
 
-  const setVoice = (v: string) => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: v } })
-  const phononBase = settings.phononBases[lang] ?? info.phononBase
   const voice =
     settings.ttsEngine === 'phonon'
-      ? resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])
+      ? resolvePhononVoice(lang, settings.phononBases[lang] ?? info.phononBase, settings.ttsVoices[lang])
       : settings.ttsVoices[lang] ?? ''
+  const setVoice = (v: string) => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: v } })
+  const phononBase = settings.phononBases[lang] ?? info.phononBase
+
+  const sectionTitle = 'text-[11px] font-semibold tracking-[1.2px] text-[#94988f]'
+  const rowCls = 'flex flex-col gap-1.5'
 
   return (
-    <div className="modal-overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal settings-modal" role="dialog" aria-modal="true" aria-label={t('settingsTitle')}>
-        <div className="modal-head">
-          <h2>{t('settingsTitle')}</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 p-4 sm:p-8" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+      <div
+        aria-label={t('settingsTitle')}
+        aria-modal="true"
+        className="w-full max-w-2xl rounded-[24px] border border-[#e5e6de] bg-[#faf9f6] p-6 shadow-2xl sm:p-8"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold tracking-[-0.5px]">{t('settingsTitle')}</h2>
+          <button
+            aria-label={t('close')}
+            className="rounded-full p-2 text-xl leading-none text-[#737970] hover:bg-[#f1f0eb]"
+            onClick={onClose}
+            type="button"
+          >
             ×
           </button>
         </div>
 
         {/* ---------- General ---------- */}
-        <section className="settings-section">
-          <h3>{t('sectionGeneral')}</h3>
-          <div className="settings-grid">
-            <div className="group">
-              <label htmlFor="set-ui-lang">{t('interfaceLang')}</label>
+        <section className="mt-6 rounded-[20px] border border-[#e5e6de] bg-white p-5">
+          <h3 className={sectionTitle}>{t('sectionGeneral')}</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-ui-lang">{t('interfaceLang')}</label>
               <select
+                className={inputCls}
                 id="set-ui-lang"
-                value={settings.uiLang}
                 onChange={e => onChange({ uiLang: e.target.value as UiLang })}
+                value={settings.uiLang}
               >
                 <option value="ru">Русский</option>
                 <option value="en">English</option>
               </select>
             </div>
-            <div className="group">
-              <label htmlFor="set-target-lang">{t('studyLang')}</label>
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-target-lang">{t('studyLang')}</label>
               <select
+                className={inputCls}
                 id="set-target-lang"
-                value={lang}
                 onChange={e => onChange({ targetLang: e.target.value as Settings['targetLang'] })}
+                value={lang}
               >
                 {TARGET_LANG_LIST.map(code => {
                   const li = langInfo(code)
@@ -184,127 +208,132 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
                 })}
               </select>
             </div>
-            <div className="group">
-              <label htmlFor="set-theme">{t('theme')}</label>
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-level">{t('level')}</label>
               <select
-                id="set-theme"
-                value={settings.theme}
-                onChange={e => onChange({ theme: e.target.value as ThemeMode })}
-              >
-                <option value="system">{t('themeSystem')}</option>
-                <option value="light">{t('themeLight')}</option>
-                <option value="dark">{t('themeDark')}</option>
-              </select>
-            </div>
-            <div className="group">
-              <label htmlFor="set-level">{t('level')}</label>
-              <select
+                className={inputCls}
                 id="set-level"
-                value={settings.level}
                 onChange={e => onChange({ level: e.target.value as Level })}
+                value={settings.level}
               >
                 {LEVELS.map(l => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
+                  <option key={l} value={l}>{l}</option>
                 ))}
               </select>
             </div>
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-translation">{t('showTranslation')}</label>
+              <button
+                aria-checked={settings.showTranslation}
+                aria-labelledby="set-translation"
+                className={`mt-1 flex h-[22px] w-[38px] items-center rounded-full p-0.5 transition-colors ${
+                  settings.showTranslation ? 'justify-end bg-[#526f60]' : 'justify-start bg-[#e5e6de]'
+                }`}
+                id="set-translation"
+                onClick={() => onChange({ showTranslation: !settings.showTranslation })}
+                role="switch"
+                type="button"
+              >
+                <span className="size-4 rounded-full bg-white" />
+              </button>
+            </div>
           </div>
-          <div className="group row">
-            <input
-              id="set-translation"
-              type="checkbox"
-              checked={settings.showTranslation}
-              onChange={e => onChange({ showTranslation: e.target.checked })}
-            />
-            <label htmlFor="set-translation">{t('showTranslation')}</label>
-          </div>
-          <div className="group row">
-            <input
-              id="set-bench"
-              type="checkbox"
-              checked={Boolean(settings.showBench)}
-              onChange={e => onChange({ showBench: e.target.checked })}
-            />
-            <label htmlFor="set-bench">{t('showBenchTab')}</label>
+          <div className="mt-4 flex items-center gap-5">
+            <label className="flex items-center gap-2 text-xs text-[#737970]" htmlFor="set-bench">
+              <input
+                checked={Boolean(settings.showBench)}
+                id="set-bench"
+                onChange={e => onChange({ showBench: e.target.checked })}
+                type="checkbox"
+              />
+              {t('showBenchTab')}
+            </label>
+            <label className="flex items-center gap-2 text-xs text-[#737970]" htmlFor="set-handsfree">
+              <input
+                checked={Boolean(settings.handsFree)}
+                id="set-handsfree"
+                onChange={e => onChange({ handsFree: e.target.checked })}
+                type="checkbox"
+              />
+              {t('handsFree')}
+            </label>
           </div>
         </section>
 
         {/* ---------- Speech ---------- */}
-        <section className="settings-section">
-          <h3>{t('sectionSpeech')}</h3>
-          <div className="settings-grid">
-            <div className="group">
-              <label htmlFor="set-tts-engine">{t('ttsEngine')}</label>
+        <section className="mt-4 rounded-[20px] border border-[#e5e6de] bg-white p-5">
+          <h3 className={sectionTitle}>{t('sectionSpeech')}</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-tts-engine">{t('ttsEngine')}</label>
               <select
+                className={inputCls}
                 id="set-tts-engine"
-                value={settings.ttsEngine}
                 onChange={e => onChange({ ttsEngine: e.target.value as Settings['ttsEngine'] })}
+                value={settings.ttsEngine}
               >
                 <option value="phonon">{t('enginePhonon')}</option>
                 <option value="system">{t('engineSystem')}</option>
               </select>
             </div>
-            <div className="group">
-              <label htmlFor="set-voice">{t('voiceLabel')} — {info.nativeName}</label>
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-voice">{`${t('voiceLabel')} — ${info.nativeName}`}</label>
               {settings.ttsEngine === 'phonon' ? (
-                <select id="set-voice" value={voice} onChange={e => setVoice(e.target.value)}>
+                <select className={inputCls} id="set-voice" onChange={e => setVoice(e.target.value)} value={voice}>
                   {phononVoices(lang, phononBase).map(v => (
-                    <option key={v.name} value={v.name}>
-                      {v.name}
-                    </option>
+                    <option key={v.name} value={v.name}>{v.name}</option>
                   ))}
                 </select>
               ) : (
-                <select id="set-voice" value={voice} onChange={e => setVoice(e.target.value)}>
+                <select className={inputCls} id="set-voice" onChange={e => setVoice(e.target.value)} value={voice}>
                   {systemVoices.length === 0 && <option value="">{t('noSystemVoiceForLang')}</option>}
                   {systemVoices.map(v => (
-                    <option key={v.uri} value={v.uri}>
-                      {v.label}
-                    </option>
+                    <option key={v.uri} value={v.uri}>{v.label}</option>
                   ))}
                 </select>
               )}
             </div>
           </div>
           {settings.ttsEngine === 'phonon' && (
-            <div className="group">
-              <label htmlFor="set-phonon-base">{t('phononBase')} — {info.nativeName}</label>
+            <div className={`${rowCls} mt-4`}>
+              <label className={labelCls} htmlFor="set-phonon-base">{`${t('phononBase')} — ${info.nativeName}`}</label>
               <input
+                className={inputCls}
                 id="set-phonon-base"
+                onChange={e => onChange({ phononBases: { ...settings.phononBases, [lang]: e.target.value } })}
+                placeholder={info.phononBase}
                 type="text"
                 value={phononBase}
-                placeholder={info.phononBase}
-                onChange={e => onChange({ phononBases: { ...settings.phononBases, [lang]: e.target.value } })}
               />
-              <p className="hint-note">{t('phononBaseHint')}</p>
+              <p className="text-[11px] leading-relaxed text-[#94988f]">{t('phononBaseHint')}</p>
             </div>
           )}
-          <div className="group">
-            <label htmlFor="set-speed">{t('ttsSpeed', { x: settings.ttsSpeed.toFixed(2) })}</label>
+          <div className={`${rowCls} mt-4`}>
+            <label className={labelCls} htmlFor="set-speed">{t('ttsSpeed', { x: settings.ttsSpeed.toFixed(2) })}</label>
             <input
+              className="accent-[#526f60]"
               id="set-speed"
-              type="range"
-              min={0.6}
               max={1.4}
-              step={0.05}
-              value={settings.ttsSpeed}
+              min={0.6}
               onChange={e => onChange({ ttsSpeed: Number(e.target.value) })}
+              step={0.05}
+              type="range"
+              value={settings.ttsSpeed}
             />
           </div>
         </section>
 
         {/* ---------- Models ---------- */}
-        <section className="settings-section">
-          <h3>{t('sectionModels')}</h3>
-          <div className="settings-grid">
-            <div className="group">
-              <label htmlFor="set-llm">{t('llmModel')}</label>
+        <section className="mt-4 rounded-[20px] border border-[#e5e6de] bg-white p-5">
+          <h3 className={sectionTitle}>{t('sectionModels')}</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-llm">{t('llmModel')}</label>
               <select
+                className={inputCls}
                 id="set-llm"
-                value={settings.llmModel}
                 onChange={e => onChange({ llmModel: e.target.value })}
+                value={settings.llmModel}
               >
                 {llmOptions.map(o => (
                   <option key={o.key} value={o.key}>
@@ -312,17 +341,18 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
                   </option>
                 ))}
               </select>
-              <p className="hint-note">
-                {currentLlm.size ? t('ramInTab', { size: currentLlm.size }) + ' ' : ''}
+              <p className="text-[11px] leading-relaxed text-[#94988f]">
+                {currentLlm.size ? `${t('ramInTab', { size: currentLlm.size })} · ` : ''}
                 {t('llmHint')}
               </p>
             </div>
-            <div className="group">
-              <label htmlFor="set-asr">{t('asrModel')}</label>
+            <div className={rowCls}>
+              <label className={labelCls} htmlFor="set-asr">{t('asrModel')}</label>
               <select
+                className={inputCls}
                 id="set-asr"
-                value={settings.asrModel}
                 onChange={e => onChange({ asrModel: e.target.value })}
+                value={settings.asrModel}
               >
                 {ASR_MODELS.map(o => (
                   <option key={o.key} value={o.key}>
@@ -333,49 +363,66 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               {settings.asrModel !== DEFAULT_ASR_KEY && <p className="hint-note" />}
             </div>
           </div>
-          <div className="group models">
-            <ul>
-              <li>
-                <span className={`dot ${dotClass(health?.models.asr)}`} />
-                {t('asrRow')}: {modelStatus(health?.models.asr, t)}
-              </li>
-              <li>
-                <span className={`dot ${dotClass(health?.models.llm)}`} />
-                {t('llmRow', { name: currentLlm.label })}: {modelStatus(health?.models.llm, t)}
-              </li>
-              <li>
-                <span className={`dot ${dotClass(health?.models.tts)}`} />
-                {t('ttsRow')}: {modelStatus(health?.models.tts, t)}
-              </li>
-            </ul>
-            {!webgpuOk && <p className="offline-note">{t('webgpuNote')}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#737970]">
+            {(['asr', 'llm', 'tts'] as const).map(kind => {
+              const m = health?.models[kind]
+              const color =
+                m?.state === 'ready' ? 'bg-[#526f60]' : m?.state === 'error' ? 'bg-[#9c625c]' : 'bg-[#c9cbbd]'
+              return (
+                <span className="flex items-center gap-1.5" key={kind}>
+                  <span className={`size-2 rounded-full ${color}`} />
+                  {kind === 'asr' ? t('asrRow', { name: 'ASR' }) : kind === 'llm' ? t('llmRow', { name: currentLlm.label }) : t('ttsRow')}
+                  {m?.state === 'loading' && m.progressText ? ` · ${m.progressText.slice(0, 40)}` : ''}
+                </span>
+              )
+            })}
           </div>
+          {!webgpuOk && <p className="mt-4 text-[11px] leading-relaxed text-[#9c625c]">{t('webgpuNote')}</p>}
         </section>
 
         {/* ---------- Google Drive ---------- */}
-        <section className="settings-section">
-          <h3>{t('syncSection')}</h3>
-          <div className="group">
-            <label htmlFor="set-google-id">{t('googleClientId')}</label>
+        <section className="mt-4 rounded-[20px] border border-[#e5e6de] bg-white p-5">
+          <h3 className={sectionTitle}>{t('syncSection')}</h3>
+          <div className={`${rowCls} mt-4`}>
+            <label className={labelCls} htmlFor="set-google-id">{t('googleClientId')}</label>
             <input
+              className={inputCls}
               id="set-google-id"
+              onChange={e => onChange({ googleClientId: e.target.value })}
+              placeholder="1234567890-xxxxxxxx.apps.googleusercontent.com"
               type="text"
               value={settings.googleClientId}
-              placeholder="1234567890-xxxxxxxx.apps.googleusercontent.com"
-              onChange={e => onChange({ googleClientId: e.target.value })}
             />
-            <p className="hint-note">{t('googleClientIdHint')}</p>
+            <p className="text-[11px] leading-relaxed text-[#94988f]">{t('googleClientIdHint')}</p>
           </div>
-          <SyncControls settings={settings} onChange={onChange} />
+          <div className="mt-4">
+            <SyncControls settings={settings} onChange={onChange} />
+          </div>
         </section>
 
         {/* ---------- Tutor ---------- */}
-        <section className="settings-section">
-          <h3>{t('sectionTutor')}</h3>
-          <p className="hint-note">{t('tutorMovedNote')}</p>
-          <button type="button" className="reset-btn" onClick={onReset}>
-            {t('newDialog')}
-          </button>
+        <section className="mt-4 rounded-[20px] border border-[#e5e6de] bg-white p-5">
+          <h3 className={sectionTitle}>{t('sectionTutor')}</h3>
+          <div className={`${rowCls} mt-4`}>
+            <label className={labelCls} htmlFor="set-extra-prompt">{t('extraPromptLabel')}</label>
+            <textarea
+              className="min-h-20 w-full resize-none rounded-xl border border-[#e5e6de] bg-white px-4 py-3 text-sm outline-none focus:border-[#526f60]"
+              id="set-extra-prompt"
+              onChange={e => onChange({ extraPrompt: e.target.value })}
+              placeholder={t('extraPromptPlaceholder')}
+              rows={3}
+              value={settings.extraPrompt}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button
+              className="rounded-full bg-[#9c625c] px-5 py-2.5 text-xs text-white hover:bg-[#8a534e]"
+              onClick={onReset}
+              type="button"
+            >
+              {t('newDialog')}
+            </button>
+          </div>
         </section>
       </div>
     </div>

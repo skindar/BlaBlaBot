@@ -4,7 +4,7 @@
 // One request at a time — the analog of the native server's gpu_lock.
 
 import { asrEngine, AsrError } from './asr'
-import { decodeBlobToPcm16k, detectSpeech, trimSilence, BadAudioError, EmptyAudioError } from './audio'
+import { decodeBlobToPcm16k, detectSpeech, splitAtSilence, trimSilence, BadAudioError, EmptyAudioError } from './audio'
 import { recordTurn } from './bench'
 import { libT } from '../i18n'
 import {
@@ -31,6 +31,8 @@ import {
   buildTranslateMessages,
   buildSingleTranslateMessages,
   buildSuggestionsMessages,
+  buildDiaryRefineMessages,
+  buildDiaryPhraseRefineMessages,
   buildVocabMessages,
   scenarioGrounding,
   vocabNotRealDefaultComment,
@@ -181,6 +183,24 @@ function looksEnglish(text: string): boolean {
 /** Drop parenthetical/bracketed remarks in a foreign script, anywhere in the
  *  line: model chatter like "Меня зовут (choose a name – e.g., Иван)" is
  *  meta-instruction, never part of the translation. */
+/** Collapse ASR repetition loops ("I don't I don't I don I don…") that
+ *  Whisper base produces on silence-heavy audio: consecutive identical
+ *  1-3 word runs collapse to a single instance, in passes until stable. */
+function collapseAsrRepetition(text: string): string {
+  // word boundaries via lookaround (\b is ASCII-only and breaks on Cyrillic):
+  // without them the backreference matches word prefixes ("Ich h|abe" -> "h h")
+  const re = /(?<![\p{L}'’])([\p{L}'’]+(?:\s+[\p{L}'’]+){0,2})(?:\s+\1)+(?![\p{L}'’])/giu
+  let out = text.replace(re, '$1')
+  let prev = text
+  let guard = 0
+  while (out !== prev && guard < 3) {
+    prev = out
+    out = out.replace(re, '$1')
+    guard++
+  }
+  return out
+}
+
 function stripForeignParens(line: string, uiLang: UiLang): string {
   const foreign = uiLang === 'ru' ? /[a-z]/i : /[а-яё]/i
   return line
@@ -324,6 +344,19 @@ function cleanSuggestions(raw: Suggestion[], uiLang: UiLang, targetLang: TargetL
   return out
 }
 
+/** Diary auto-refine: clean ONE phrase for the refined view — bare-text
+ *  contract for tiny models; a failed or drifting refine keeps the raw line. */
+async function refineDiaryPhrase(text: string, level: Level, targetLang: TargetLang): Promise<string> {
+  const call = await llmEngine.chat(buildDiaryPhraseRefineMessages(level, targetLang, text), {
+    temperature: 0.3,
+    maxTokens: 120,
+  })
+  const refined = stripQuoteWrappers(stripThink(call.text.trim()))
+  if (!refined || refined.length > 300) return ''
+  if (targetLang !== 'en' && looksEnglish(refined)) return ''
+  return refined
+}
+
 export function processChat(args: ProcessChatArgs): Promise<ChatResponse> {
   return enqueue(() => processChatInner(args))
 }
@@ -358,9 +391,17 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       throw new EmptyAudioError(libT('errSilence'))
     }
     const trimmed = trimSilence(pcm, vad, 16000)
+    // hands-free monologues: feed Whisper speech chunks, not one long
+    // silence-heavy blob — that is where it starts looping "I don't I don…"
+    const segments = splitAtSilence(trimmed, 16000)
     let text: string
     try {
-      text = await asrEngine.transcribe(trimmed, targetLang)
+      let joined = ''
+      for (const seg of segments) {
+        const part = await asrEngine.transcribe(seg, targetLang)
+        if (part) joined = joined ? `${joined} ${part.trim()}` : part.trim()
+      }
+      text = collapseAsrRepetition(joined)
     } catch (err) {
       if (err instanceof AsrError) throw err
       throw new PipelineError(libT('errLlmFailed', { reason: err instanceof Error ? err.message : String(err) }))
@@ -862,7 +903,18 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       }
       if (corrected === userText) corrected = undefined
     }
-    diary.append(targetLang, userText, userTranslation, corrected)
+    const entry = diary.append(targetLang, userText, userTranslation, corrected)
+    // Auto-refine for the diary's refined view: strip fillers and false
+    // starts, fix grammar — in the background, never blocking the reply.
+    // Runs through the shared queue so it does not contend with the turn.
+    void enqueue(async () => {
+      try {
+        const refined = await refineDiaryPhrase(userText, level, targetLang)
+        if (refined) diary.patchRefined(entry.uid, refined)
+      } catch {
+        /* the raw + corrected line stays — refine is a nicety */
+      }
+    })
   }
 
   // ---- TTS: prepare the selected engine (actual speech starts from the UI) ----
@@ -928,6 +980,62 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     warning,
     timings,
   }
+}
+
+export interface DiaryRefineResult {
+  /** coherent diary page in the target language */
+  text: string
+  /** UI-language translation ('' when unavailable) */
+  translation: string
+}
+
+/** Diary "refined" view: rewrite the day's raw lines into one readable page
+ *  (target language), then translate it for comfortable re-reading. */
+export async function processDiaryRefine(args: {
+  /** raw diary lines (corrected versions win when present) */
+  lines: string[]
+  level: Level
+  targetLang: TargetLang
+  uiLang: UiLang
+  llmKey: string
+}): Promise<DiaryRefineResult> {
+  const { level, targetLang, uiLang, llmKey } = args
+  if (llmEngine.loadedKey === null || llmEngine.loadedKey !== llmKey) {
+    throw new ModelsNotReadyError(libT('errModelsNotReady'))
+  }
+  const lines = args.lines.map(l => l.trim()).filter(Boolean)
+  if (lines.length === 0) throw new InvalidParameterError(libT('errNeedInput'))
+
+  const refineOnce = async (languageRetry: boolean): Promise<string> => {
+    const call = await llmEngine.chat(buildDiaryRefineMessages(level, targetLang, lines, languageRetry), {
+      temperature: 0.5,
+    })
+    const text = stripQuoteWrappers(stripThink(call.text.trim()))
+    return text.length > 0 && text.length <= 4000 ? text : ''
+  }
+
+  let text = await refineOnce(false)
+  if (!text || (targetLang !== 'en' && looksEnglish(text))) {
+    const retry = await refineOnce(true)
+    if (retry && !(targetLang !== 'en' && looksEnglish(retry))) text = retry
+  }
+  if (!text) throw new PipelineError(libT('errLlmFailed', { reason: libT('modelError') }))
+
+  // translation for comfortable re-reading — best effort, never fails the page
+  let translation = ''
+  try {
+    const trCall = await llmEngine.chat(buildSingleTranslateMessages(targetLang, uiLang, text), {
+      temperature: LLM_TRANSLATION_TEMPERATURE,
+    })
+    const candidate = parseSingleTranslation(trCall.text)
+    if (translationOk(candidate, uiLang) && translationSane(text, candidate, uiLang, false)) {
+      translation = candidate
+    }
+  } catch {
+    /* the refined page works without a translation */
+  }
+
+  return { text, translation }
 }
 
 export interface VocabResult {

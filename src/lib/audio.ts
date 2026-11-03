@@ -78,6 +78,66 @@ export function detectSpeech(samples: Float32Array, sr: number): VadResult {
   return { isSpeech, speechMs, audioMs, peakDb, thresholdDb }
 }
 
+/** Split a recording at long inner silences. Whisper base hallucinates
+ *  repetition loops on silence-heavy audio and degrades past its 30-s
+ *  window — hands-free diary monologues must be fed to it in speech
+ *  chunks, not as one long blob. */
+export function splitAtSilence(
+  samples: Float32Array,
+  sr: number,
+  opts: { minSilenceMs?: number; minSegmentMs?: number; maxSegmentMs?: number } = {},
+): Float32Array[] {
+  const minSilenceMs = opts.minSilenceMs ?? 900
+  const minSegmentMs = opts.minSegmentMs ?? 700
+  const maxSegmentMs = opts.maxSegmentMs ?? 28000
+  const { dbs } = frameDb(samples, sr, FRAME_MS)
+  if (dbs.length === 0) return [samples]
+  let peak = -Infinity
+  for (const db of dbs) if (db > peak) peak = db
+  const thresholdDb = Math.max(-50, peak - 35)
+  const frameLen = Math.round((sr * FRAME_MS) / 1000)
+  const frames = Math.min(dbs.length, Math.floor(samples.length / frameLen))
+  // cut points: [silenceStartFrame, speechResumeFrame]
+  const cuts: Array<[number, number]> = []
+  let runStart = -1
+  for (let i = 0; i < frames; i++) {
+    if (dbs[i] <= thresholdDb) {
+      if (runStart === -1) runStart = i
+    } else {
+      if (runStart !== -1 && (i - runStart) * FRAME_MS >= minSilenceMs) cuts.push([runStart, i])
+      runStart = -1
+    }
+  }
+  const segments: Float32Array[] = []
+  let start = 0
+  const pushSeg = (from: number, to: number) => {
+    if ((to - from) * FRAME_MS < minSegmentMs) return
+    const seg = samples.subarray(from * frameLen, Math.min(to * frameLen, samples.length))
+    if (seg.length > 0) segments.push(seg)
+  }
+  for (const [cutAt, resumeAt] of cuts) {
+    pushSeg(start, cutAt)
+    start = resumeAt
+  }
+  pushSeg(start, frames)
+  if (segments.length === 0) return [samples]
+  // keep each segment inside Whisper's comfortable window
+  const out: Float32Array[] = []
+  for (const seg of segments) {
+    const segMs = (seg.length / sr) * 1000
+    const parts = Math.ceil(segMs / maxSegmentMs)
+    if (parts <= 1) {
+      out.push(seg)
+      continue
+    }
+    const size = Math.ceil(seg.length / parts)
+    for (let i = 0; i < seg.length; i += size) {
+      out.push(seg.subarray(i, Math.min(i + size, seg.length)))
+    }
+  }
+  return out.length > 0 ? out : [samples]
+}
+
 /** Port of trim_silence: trim edge silence with 120 ms padding */
 export function trimSilence(samples: Float32Array, vad: VadResult, sr: number, padMs = 120): Float32Array {
   const { dbs } = frameDb(samples, sr, FRAME_MS)

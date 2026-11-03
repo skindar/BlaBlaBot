@@ -87,6 +87,50 @@ If it is NOT a real ${target} word (made-up, typo, misspelled, or not ${target} 
 }`
 }
 
+/** Diary auto-refine: clean ONE spoken phrase — remove fillers and false
+ *  starts, fix grammar, keep the meaning and the student's own words. */
+export function buildDiaryPhraseRefineMessages(level: Level, targetLang: TargetLang, line: string): LlmMessage[] {
+  const target = langNameForPrompt(targetLang)
+  return [
+    {
+      role: 'system',
+      content: `You are a diary editor for a ${target} student at ${level} level.
+The student's diary line below was spoken freely and may contain fillers, stutters, repeated words or abandoned fragments.
+Rewrite it as ONE clean natural ${target} sentence: the same meaning, the same person and tense, at the student's level.
+Remove fillers and fragments, fix grammar silently. Change nothing else, add nothing.
+Output ONLY the cleaned sentence — no comments, no quotes, no JSON.`,
+    },
+    { role: 'user', content: line },
+  ]
+}
+
+/** Diary "refined" page: rewrite the day's raw lines into one coherent,
+ *  readable diary text in the target language (facts intact, mistakes fixed). */
+export function buildDiaryRefineMessages(
+  level: Level,
+  targetLang: TargetLang,
+  lines: string[],
+  /** retry after the text came out in the wrong language */
+  languageRetry = false,
+): LlmMessage[] {
+  const target = langNameForPrompt(targetLang)
+  const suffix =
+    languageRetry && target !== 'English'
+      ? `\nCRITICAL LANGUAGE RULE: write the diary ONLY in ${target} — every single word.`
+      : ''
+  return [
+    {
+      role: 'system',
+      content: `You are a diary editor for a ${target} student at ${level} level.
+The student told about their day in ${target}; the numbered lines below are what they said.
+Rewrite these lines into ONE coherent diary page in ${target}: simple first-person prose in the past tense, at the student's level, pleasant to re-read later.
+Keep ALL the facts exactly as told — add nothing, invent nothing, judge nothing. Fix grammar mistakes silently.
+Output ONLY the diary text — no comments, no quotes, no JSON.${suffix}`,
+    },
+    { role: 'user', content: lines.map((l, i) => `${i + 1}. ${l}`).join('\n') },
+  ]
+}
+
 /** Single-text translation contract (tiny tier): one text in, bare line out.
  *  No JSON schema — the two-key translate call is exactly where 1B models
  *  break, while single-sentence translation they do reliably. */

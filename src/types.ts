@@ -46,6 +46,8 @@ export interface HistoryMessage {
 export interface ChatMessage {
   id: string
   role: 'user' | 'tutor'
+  /** message time (ms epoch) for the timestamp line under the bubble */
+  createdAt?: number
   text: string
   userTranslation?: string
   corrections?: Correction[]
@@ -81,6 +83,8 @@ export interface Settings {
   driveAutoSync: boolean
   /** diary mode: the tutor is a supportive listener, user messages go to the diary */
   diaryMode?: boolean
+  /** hands-free mic: tap to start, auto-submit after a short silence pause */
+  handsFree?: boolean
   /** show the Bench tab (hidden by default — a developer/article tool) */
   showBench?: boolean
 }
@@ -104,6 +108,9 @@ export interface VocabItem {
 
 /** One diary entry: the student's own words about their day (diary mode) */
 export interface DiaryEntry {
+  /** auto-refined phrase for the diary's refined view: fillers removed,
+   *  grammar fixed, meaning intact ('' until the background refine lands) */
+  refined?: string
   uid: string
   lang: TargetLang
   /** YYYY-MM-DD (local) */

@@ -1,8 +1,13 @@
+// The conversation list in the design's look: the date divider, the
+// message stream, the answer chips and the "need a starting point?" hint
+// for an empty conversation.
+
 import { useEffect, useRef } from 'react'
 import type { ChatMessage, Suggestion } from '../types'
 import type { UiLang } from '../i18n'
 import { useI18n } from '../i18n'
 import type { TargetLang } from '../lib/langs'
+import { Icon } from '../ui/design'
 import { MessageBubble } from './MessageBubble'
 
 interface Props {
@@ -12,64 +17,30 @@ interface Props {
   uiLang: UiLang
   onReplay: (msg: ChatMessage) => void
   onSuggest: (text: string) => void
+  onSavePhrase?: (text: string) => void
+  /** fill the typing box with a starter line ("Need a starting point?") */
+  onStartHint?: (text: string) => void
 }
 
-/** Starter suggestions per target language (translation is in the UI language) */
+/** Starter lines per target language for the "need a starting point?" hint */
 const STARTER_TEXTS: Record<TargetLang, string[]> = {
-  de: [
-    'Guten Tag! Wie geht es dir?',
-    'Ich möchte über mein Wochenende erzählen.',
-    'Stell mir bitte eine Frage.',
-  ],
-  en: ["Hi! How's it going?", "I'd like to talk about my weekend.", 'Ask me a question, please.'],
-  fr: [
-    'Bonjour ! Comment ça va ?',
-    'Je veux parler de mon week-end.',
-    "Pose-moi une question, s'il te plaît.",
-  ],
-  es: [
-    '¡Hola! ¿Cómo estás?',
-    'Quiero hablar de mi fin de semana.',
-    'Hazme una pregunta, por favor.',
-  ],
-  pt: [
-    'Olá! Tudo bem?',
-    'Quero falar sobre meu fim de semana.',
-    'Me faz uma pergunta, por favor.',
-  ],
+  de: ['Guten Tag! Ich möchte über mein Wochenende erzählen.', 'Hallo! Erzähl mir bitte eine Frage.'],
+  en: ["Hi! I'd like to talk about my weekend.", 'Hello! Please ask me a question.'],
+  fr: ['Bonjour ! Je veux parler de mon week-end.', 'Salut ! Pose-moi une question, s’il te plaît.'],
+  es: ['¡Hola! Quiero hablar de mi fin de semana.', '¡Hola! Hazme una pregunta, por favor.'],
+  pt: ['Olá! Quero falar sobre meu fim de semana.', 'Olá! Me faz uma pergunta, por favor.'],
 }
 
-const STARTER_TRANSLATIONS: Record<TargetLang, { ru: string[]; en: string[] }> = {
-  de: {
-    ru: ['Привет! Как у тебя дела?', 'Я хочу рассказать о своих выходных.', 'Задай мне, пожалуйста, вопрос.'],
-    en: ['Hello! How are you?', 'I want to tell you about my weekend.', 'Ask me a question, please.'],
-  },
-  en: {
-    ru: ['Привет! Как дела?', 'Я хочу поговорить о своих выходных.', 'Задай мне, пожалуйста, вопрос.'],
-    en: ["Hi! How's it going?", "I'd like to talk about my weekend.", 'Ask me a question, please.'],
-  },
-  fr: {
-    ru: ['Здравствуй! Как дела ?', 'Я хочу рассказать о своих выходных.', 'Задай мне, пожалуйста, вопрос.'],
-    en: ['Hello! How are you?', 'I want to talk about my weekend.', 'Ask me a question, please.'],
-  },
-  es: {
-    ru: ['Привет! Как дела?', 'Я хочу рассказать о своих выходных.', 'Задай мне, пожалуйста, вопрос.'],
-    en: ['Hi! How are you?', 'I want to talk about my weekend.', 'Ask me a question, please.'],
-  },
-  pt: {
-    ru: ['Привет! Как дела?', 'Я хочу рассказать о своих выходных.', 'Задай мне, пожалуйста, вопрос.'],
-    en: ['Hi! How are you?', 'I want to talk about my weekend.', 'Ask me a question, please.'],
-  },
-}
-
-export function starterSuggestions(targetLang: TargetLang, uiLang: 'ru' | 'en'): Suggestion[] {
-  return STARTER_TEXTS[targetLang].map((text, i) => ({
-    text,
-    translation: STARTER_TRANSLATIONS[targetLang][uiLang][i],
-  }))
-}
-
-export function MessageList({ messages, showTranslation, targetLang, uiLang, onReplay, onSuggest }: Props) {
+export function MessageList({
+  messages,
+  showTranslation,
+  targetLang,
+  uiLang,
+  onReplay,
+  onSuggest,
+  onSavePhrase,
+  onStartHint,
+}: Props) {
   const t = useI18n()
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -79,62 +50,67 @@ export function MessageList({ messages, showTranslation, targetLang, uiLang, onR
 
   const lastTutor = [...messages].reverse().find(m => m.role === 'tutor')
   const chips = lastTutor?.suggestions ?? []
-  const starters = starterSuggestions(targetLang, uiLang)
+  const dateLabel = new Date().toLocaleDateString(uiLang === 'ru' ? 'ru-RU' : 'en-US', {
+    month: 'long',
+    day: 'numeric',
+  })
 
   return (
-    <section className="message-list">
-      {messages.length === 0 && (
-        <div className="empty-state">
-          <h2>{t('appName')}</h2>
-          <p>
-            {t('emptyText')}
-            <br />
-            {t('emptyHint')}
-          </p>
-          <div className="suggestions suggestions-centered">
-            {starters.map(s => (
-              <button
-                key={s.text}
-                type="button"
-                className="suggestion-chip"
-                onClick={() => onSuggest(s.text)}
-              >
-                <span className="suggestion-de" lang={targetLang}>
-                  {s.text}
-                </span>
-                {s.translation !== s.text && <span className="suggestion-ru">{s.translation}</span>}
-              </button>
-            ))}
-          </div>
+    <section className="mx-auto w-full max-w-[896px] px-5 pb-8 pt-[29px] sm:px-8 xl:px-11">
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-[#e5e6de]" />
+        <span className="text-[11px] text-[#94988f]">{t('today', { date: dateLabel })}</span>
+        <span className="h-px flex-1 bg-[#e5e6de]" />
+      </div>
+
+      {messages.length === 0 ? (
+        <div className="mt-8 flex flex-col items-center gap-4 pt-10 text-center">
+          <p className="max-w-md text-sm leading-6 text-[#737970]">{t('emptyText')}</p>
+          {onStartHint && (
+            <button
+              className="flex flex-wrap items-center justify-center gap-2 text-xs"
+              onClick={() => onStartHint(STARTER_TEXTS[targetLang][0])}
+              type="button"
+            >
+              <Icon name="bulb" size={15} />
+              <span className="text-[#737970]">{t('needStart')}</span>
+              <span className="font-medium text-[#526f60]">“{STARTER_TEXTS[targetLang][0]}”</span>
+            </button>
+          )}
         </div>
-      )}
-      {messages.map(m => (
-        <MessageBubble
-          key={m.id}
-          msg={m}
-          showTranslation={showTranslation}
-          targetLang={targetLang}
-          onReplay={onReplay}
-        />
-      ))}
-      {messages.length > 0 && chips.length > 0 && (
-        <div className="row tutor">
-          <div className="suggestions">
-            <div className="suggestions-title">{t('suggestionsTitle')}</div>
-            {chips.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                className="suggestion-chip"
-                onClick={() => onSuggest(s.text)}
-              >
-                <span className="suggestion-de" lang={targetLang}>
-                  {s.text}
-                </span>
-                {s.translation && <span className="suggestion-ru">{s.translation}</span>}
-              </button>
-            ))}
-          </div>
+      ) : (
+        <div className="mt-8 space-y-8">
+          {messages.map(m => (
+            <MessageBubble
+              key={m.id}
+              msg={m}
+              showTranslation={showTranslation}
+              targetLang={targetLang}
+              onReplay={onReplay}
+              onSavePhrase={onSavePhrase}
+            />
+          ))}
+
+          {chips.length > 0 && (
+            <div className="flex flex-col items-end gap-[9px]">
+              <div className="flex max-w-[588px] flex-wrap justify-end gap-2">
+                {chips.map((s: Suggestion, i: number) => (
+                  <button
+                    className="rounded-full border border-[#e5e6de] bg-white px-4 py-2 text-left text-[13px] transition-colors hover:border-[#526f60] hover:text-[#526f60]"
+                    key={i}
+                    onClick={() => onSuggest(s.text)}
+                    type="button"
+                  >
+                    {s.text}
+                    {s.translation && (
+                      <span className="ml-2 text-[11px] text-[#94988f]">{s.translation}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] text-[#94988f]">{t('suggestionsTitle')}</span>
+            </div>
+          )}
         </div>
       )}
       <div ref={endRef} />

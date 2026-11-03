@@ -1,203 +1,171 @@
-// Narrow left sidebar: brand, level, voice picker, the "Let's talk
-// about…" free-form topic/instructions field, compact model status and
-// the settings button. All other settings live in SettingsModal.
+// The design's left sidebar: brand, primary navigation (Conversation /
+// Cards / Diary), the current conversation, the weekly streak and the
+// account button. Everything the old Sidebar did now lives in the
+// navigation and the right inspiration panel.
 
 import { useEffect, useState } from 'react'
-import type { Level, ModelHealth, Settings, WebHealth, WebModelHealth } from '../types'
+import type { Settings } from '../types'
 import { useI18n } from '../i18n'
-import { langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
-import { LlmEngine, llmModelByKey } from '../lib/llm'
-import { ttsEngine } from '../lib/tts'
+import { BotMark, Icon, type IconName } from '../ui/design'
+import { TARGET_LANG_LIST, langInfo } from '../lib/langs'
+import { conversation, diary, vocab } from '../lib/store'
+
+export type NavTab = 'conversation' | 'cards' | 'diary' | 'bench'
 
 interface Props {
   settings: Settings
-  onChange: (patch: Partial<Settings>) => void
-  health: WebHealth | null
+  active: NavTab
+  /** Google sign-in gates the diary */
+  googleSignedIn: boolean
+  diaryLocked: boolean
+  onNav: (tab: NavTab) => void
+  onNewConversation: () => void
   onOpenSettings: () => void
 }
 
-const LEVELS: Level[] = ['A1', 'A2', 'B1', 'B2']
-
-function stateLabel(state: string | undefined, t: (k: string) => string): string {
-  if (state === 'ready') return t('modelReady')
-  if (state === 'loading') return t('modelLoading')
-  if (state === 'error') return t('modelError')
-  return t('modelIdle')
-}
-
-function dotClass(model: ModelHealth | undefined): string {
-  if (model?.state === 'ready') return 'ready'
-  if (model?.state === 'error') return 'offline'
-  return 'loading'
-}
-
-/** Short model status line: "ready · WebGPU" / "loading… 42%" */
-function modelStatus(model: WebModelHealth | undefined, t: (k: string) => string): string {
-  if (!model) return stateLabel(undefined, t)
-  if (model.state === 'ready') return model.progressText || t('modelReady')
-  if (model.state === 'error') return model.error.slice(0, 80) || t('modelError')
-  if (model.state === 'loading') {
-    const pct = typeof model.progress === 'number' && model.progress > 0 ? ` ${Math.round(model.progress * 100)}%` : ''
-    return `${t('modelLoading')}${pct}`
+/** Talking days this week: any chat message or diary entry counts */
+function streakDays(): number {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  const days = new Set<string>()
+  const touch = (iso: string) => {
+    const d = new Date(iso)
+    if (d >= monday) days.add(d.toDateString())
   }
-  return stateLabel(model.state, t)
+  for (const lang of TARGET_LANG_LIST) {
+    for (const m of conversation.recent(lang, 200)) touch(m.created_at)
+  }
+  for (const e of diary.list()) touch(e.created_at)
+  return days.size
 }
 
-export function Sidebar({ settings, onChange, health, onOpenSettings }: Props) {
+export function Sidebar({
+  settings,
+  active,
+  googleSignedIn,
+  diaryLocked,
+  onNav,
+  onNewConversation,
+  onOpenSettings,
+}: Props) {
   const t = useI18n()
-  const lang = settings.targetLang
-  const info = langInfo(lang)
-  const [systemVoices, setSystemVoices] = useState<Array<{ uri: string; label: string }>>([])
-  const webgpuOk = LlmEngine.supported()
+  const [streak, setStreak] = useState(0)
+  const [cardCount, setCardCount] = useState(0)
+  const [hasConversation, setHasConversation] = useState(false)
 
   useEffect(() => {
-    if (settings.ttsEngine !== 'system') return
-    let cancelled = false
-    void ttsEngine.listVoices(lang).then(voices => {
-      if (cancelled) return
-      setSystemVoices(
-        voices.map(v => ({
-          uri: v.voiceURI,
-          label: `${v.name} (${v.lang})${v.localService ? '' : ` · ${t('systemVoiceNet')}`}`,
-        })),
-      )
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [settings.ttsEngine, lang, health, t])
+    setStreak(streakDays())
+    setCardCount(vocab.listAll(settings.targetLang).filter(i => !i.known).length)
+    setHasConversation(conversation.recent(settings.targetLang, 1).length > 0)
+  }, [settings.targetLang, active])
 
-  const phononBase = settings.phononBases[lang] ?? info.phononBase
-  const voice =
-    settings.ttsEngine === 'phonon'
-      ? resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])
-      : settings.ttsVoices[lang] ?? ''
-  const currentLlm = llmModelByKey(settings.llmModel)
+  const nav: Array<{ label: string; tab: NavTab; icon: IconName; badge?: number }> = [
+    { label: t('navConversation'), tab: 'conversation', icon: 'messages' },
+    { label: t('navCards'), tab: 'cards', icon: 'layers', badge: cardCount },
+    { label: t('navDiary'), tab: 'diary', icon: 'book' },
+  ]
+  if (settings.showBench) nav.push({ label: t('tabBench'), tab: 'bench', icon: 'chart' })
 
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-icon">💬</div>
-        <div>
-          <h1>{t('appName')}</h1>
-          <p>
-            {info.flag} {info.nativeName} · {settings.level}
-          </p>
+    <aside className="scroll-sage sticky top-0 hidden h-dvh w-56 shrink-0 flex-col justify-between overflow-y-auto border-r border-[#e5e6de] bg-[#f1f0eb] px-4 pb-5 pt-8 lg:flex">
+      <div>
+        <div className="flex items-center gap-[9px] pl-2">
+          <BotMark large />
+          <span className="text-xl tracking-[-0.7px]">{t('appName')}</span>
         </div>
+
+        <nav aria-label="Primary navigation" className="mt-8 space-y-[5px]">
+          {nav.map(({ label, tab, icon, badge }) => {
+            const locked = tab === 'diary' && diaryLocked
+            return (
+              <button
+                className={`flex h-[46px] w-full items-center gap-3 rounded-xl px-3 text-sm transition-colors ${
+                  active === tab
+                    ? 'bg-[#e5ece4] font-semibold text-[#526f60]'
+                    : 'text-[#737970] hover:bg-[#e9e9e3]'
+                } ${locked ? 'opacity-50' : ''}`}
+                key={tab}
+                onClick={() => !locked && onNav(tab)}
+                title={locked ? t('diaryNeedsGoogle') : undefined}
+                type="button"
+              >
+                <Icon name={icon} size={20} />
+                <span className="flex-1 text-left">{label}</span>
+                {typeof badge === 'number' && badge > 0 && (
+                  <span className="text-xs font-normal">{badge}</span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+
+        <section className="mt-8 px-3">
+          <h2 className="text-[11px] font-semibold tracking-[1px] text-[#94988f]">
+            {t('recentTitle')}
+          </h2>
+          {hasConversation && (
+            <button
+              className="mt-[18px] block w-full text-left"
+              onClick={() => onNav('conversation')}
+              type="button"
+            >
+              <span className="block text-[13px]">
+                {t('convTitle', { lang: langInfo(settings.targetLang).nativeName })}
+              </span>
+              <span className="mt-1.5 block text-[11px] text-[#737970]">{t('currentTopicLine')}</span>
+            </button>
+          )}
+          <button
+            className="mt-[18px] flex items-center gap-[7px] text-xs text-[#526f60]"
+            onClick={onNewConversation}
+            type="button"
+          >
+            <Icon name="plus" size={15} />
+            {t('newConversation')}
+          </button>
+        </section>
       </div>
 
-      <div className="group">
-        <label htmlFor="level">{t('level')}</label>
-        <select
-          id="level"
-          value={settings.level}
-          onChange={e => onChange({ level: e.target.value as Level })}
+      <div>
+        <section className="rounded-xl bg-[#faf9f6] p-4">
+          <div className="flex items-center gap-2">
+            <Icon name="sprout" size={18} />
+            <h2 className="text-[13px] font-semibold">{t('streakTitle')}</h2>
+          </div>
+          <p className="mt-2.5 text-xs leading-[1.5] text-[#737970]">
+            {t('streakText', { days: streak })}
+          </p>
+          <div className="mt-2.5 flex justify-between">
+            {'MTWTFSS'.split('').map((day, index) => {
+              const dayIdx = (new Date().getDay() + 6) % 7
+              return (
+                <div className="flex flex-col items-center gap-[7px]" key={`${day}-${index}`}>
+                  <span className={`h-1 w-4 rounded-sm ${index < streak ? 'bg-[#526f60]' : 'bg-[#e5e6de]'}`} />
+                  <span className={`text-[9px] ${index === dayIdx ? 'text-[#526f60]' : 'text-[#94988f]'}`}>
+                    {day}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+        <button
+          className="mt-5 flex w-full items-center gap-2.5 px-2 text-left"
+          onClick={onOpenSettings}
+          type="button"
         >
-          {LEVELS.map(l => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e5e6de] text-[13px] font-semibold text-[#526f60]">
+            {googleSignedIn ? '●' : '○'}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px]">{t('appName')}</span>
+            <span className="mt-[3px] block text-[11px] text-[#737970]">{t('yourSpace')}</span>
+          </span>
+          <Icon name="settings" size={18} />
+        </button>
       </div>
-
-      <div className="group">
-        <label htmlFor="voice">{t('voiceLabel')}</label>
-        {settings.ttsEngine === 'phonon' ? (
-          <select
-            id="voice"
-            value={voice}
-            onChange={e => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: e.target.value } })}
-          >
-            {phononVoices(lang, phononBase).map(v => (
-              <option key={v.name} value={v.name}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            id="voice"
-            value={voice}
-            onChange={e => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: e.target.value } })}
-          >
-            {systemVoices.length === 0 && <option value="">{t('noSystemVoiceForLang')}</option>}
-            {systemVoices.map(v => (
-              <option key={v.uri} value={v.uri}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      <div className="group topic-group">
-        <label htmlFor="topic-extra">{t('talkAbout')}</label>
-        {settings.diaryMode ? (
-          <p className="hint-note">{t('diaryModeHint')}</p>
-        ) : (
-          <>
-            <textarea
-              id="topic-extra"
-              rows={3}
-              value={settings.extraPrompt}
-              placeholder={t('topicPlaceholder')}
-              onChange={e => onChange({ extraPrompt: e.target.value })}
-            />
-            <p className="hint-note">{t('topicHint')}</p>
-          </>
-        )}
-      </div>
-
-      <div className="group row diary-toggle">
-        <input
-          id="diary-mode"
-          type="checkbox"
-          checked={Boolean(settings.diaryMode)}
-          onChange={e => onChange({ diaryMode: e.target.checked })}
-        />
-        <label htmlFor="diary-mode">📖 {t('diaryMode')}</label>
-      </div>
-
-      <div className="group models compact">
-        <ul>
-          <li title={`${t('asrRow')}: ${modelStatus(health?.models.asr, t)}`}>
-            <span className={`dot ${dotClass(health?.models.asr)}`} />
-            <span className="model-name">ASR</span>
-          </li>
-          <li title={`${currentLlm.label} (LLM): ${modelStatus(health?.models.llm, t)}`}>
-            <span className={`dot ${dotClass(health?.models.llm)}`} />
-            <span className="model-name llm-current">
-              <span className="brain" aria-hidden="true">🧠</span>
-              <span className="llm-label">{currentLlm.label}</span>
-            </span>
-          </li>
-          <li title={`${t('ttsRow')}: ${modelStatus(health?.models.tts, t)}`}>
-            <span className={`dot ${dotClass(health?.models.tts)}`} />
-            <span className="model-name">TTS</span>
-          </li>
-        </ul>
-        {!webgpuOk && <p className="offline-note">{t('webgpuNote')}</p>}
-      </div>
-
-      <button
-        type="button"
-        className="gear-btn"
-        onClick={onOpenSettings}
-        title={t('openSettings')}
-        aria-label={t('openSettings')}
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.8" />
-          <path
-            d="M12 2.8l1.2 2.3a7 7 0 0 1 2.3.96l2.5-.7 1.7 2.9-1.9 1.8a7 7 0 0 1 0 2.68l1.9 1.8-1.7 2.9-2.5-.7a7 7 0 0 1-2.3.96L12 21.2l-1.2-2.3a7 7 0 0 1-2.3-.96l-2.5.7-1.7-2.9 1.9-1.8a7 7 0 0 1 0-2.68L4.3 9.46 6 6.56l2.5.7a7 7 0 0 1 2.3-.96L12 2.8z"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>{t('openSettings')}</span>
-      </button>
     </aside>
   )
 }

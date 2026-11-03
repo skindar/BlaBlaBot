@@ -1,18 +1,22 @@
-// Diary tab: everything the student said about their day in diary mode,
-// grouped by date — verbatim, with translation and the corrected version.
-// Syncs to Google Drive when the user is signed in.
+// Diary tab in the design's look: everything the student said about their
+// day in diary mode, grouped by date, with the raw / refined page views
+// and Google Drive sync. The refine view rebuilds the day's story from
+// the raw lines (in the background even per phrase).
 
 import { useEffect, useState } from 'react'
-import type { DiaryEntry } from '../types'
+import type { DiaryEntry, Level } from '../types'
 import type { TargetLang } from '../lib/langs'
 import { useI18n } from '../i18n'
-import { diary } from '../lib/store'
+import { diary, diaryRefined, type DiaryRefined } from '../lib/store'
+import { processDiaryRefine } from '../lib/engine'
 import { getSyncStatus, subscribeSync, syncNow } from '../lib/sync'
 
 interface Props {
   active: boolean
   targetLang: TargetLang
   uiLang: 'ru' | 'en'
+  level: Level
+  llmModel: string
 }
 
 function timeOf(iso: string): string {
@@ -26,16 +30,20 @@ function todayLabel(date: string, uiLang: 'ru' | 'en'): string {
   const todayStr = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`
   if (date === todayStr) return uiLang === 'ru' ? 'Сегодня' : 'Today'
   const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
+  yesterday.setDate(yesterday.getDate() - 1)
   const yStr = `${yesterday.getFullYear()}-${p(yesterday.getMonth() + 1)}-${p(yesterday.getDate())}`
   if (date === yStr) return uiLang === 'ru' ? 'Вчера' : 'Yesterday'
   return date
 }
 
-export function DiaryView({ active, targetLang, uiLang }: Props) {
+export function DiaryView({ active, targetLang, uiLang, level, llmModel }: Props) {
   const t = useI18n()
   const [entries, setEntries] = useState<DiaryEntry[]>([])
   const [sync, setSync] = useState(getSyncStatus())
+  const [view, setView] = useState<'raw' | 'refined'>('raw')
+  const [refined, setRefined] = useState<Record<string, DiaryRefined | null>>({})
+  const [busyDate, setBusyDate] = useState<string | null>(null)
+  const [refineError, setRefineError] = useState<string | null>(null)
 
   useEffect(() => subscribeSync(setSync), [])
 
@@ -43,9 +51,42 @@ export function DiaryView({ active, targetLang, uiLang }: Props) {
     if (active) setEntries(diary.list(targetLang))
   }, [active, targetLang])
 
+  // load refined pages for the dates that have raw entries
+  useEffect(() => {
+    if (!active) return
+    const dates = new Set(diary.list(targetLang).map(e => e.date))
+    const map: Record<string, DiaryRefined | null> = {}
+    for (const date of dates) map[date] = diaryRefined.get(targetLang, date)
+    setRefined(map)
+    diaryRefined.prune(targetLang, dates)
+  }, [active, targetLang, entries.length])
+
   const remove = (uid: string) => {
     diary.delete(uid)
     setEntries(diary.list(targetLang))
+  }
+
+  // the per-phrase auto-refine lands in the background — pick it up
+  useEffect(() => {
+    if (!active || view !== 'refined') return
+    const id = window.setInterval(() => setEntries(diary.list(targetLang)), 3000)
+    return () => window.clearInterval(id)
+  }, [active, view, targetLang])
+
+  const refine = async (date: string, list: DiaryEntry[]) => {
+    if (busyDate) return
+    setBusyDate(date)
+    setRefineError(null)
+    try {
+      const lines = list.map(e => (e.corrected && e.corrected.trim() ? e.corrected : e.text))
+      const result = await processDiaryRefine({ lines, level, targetLang, uiLang, llmKey: llmModel })
+      diaryRefined.save(targetLang, date, result.text, result.translation)
+      setRefined(prev => ({ ...prev, [date]: diaryRefined.get(targetLang, date) }))
+    } catch (err) {
+      setRefineError(err instanceof Error ? err.message : t('diaryRefineFailed'))
+    } finally {
+      setBusyDate(null)
+    }
   }
 
   const byDate = new Map<string, DiaryEntry[]>()
@@ -64,50 +105,147 @@ export function DiaryView({ active, targetLang, uiLang }: Props) {
     : t('syncOffHint')
 
   return (
-    <section className="cards-view diary-view">
-      <div className="diary-head">
-        <h2>{t('tabDiary')}</h2>
-        <span className={`diary-sync${sync.error ? ' error' : ''}`} title={sync.error ? t('syncError', { error: sync.error }) : syncLine}>
+    <section className="mx-auto w-full max-w-[760px] px-5 pb-10 pt-8 sm:px-8">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold tracking-[-0.5px]">{t('tabDiary')}</h2>
+        <div
+          aria-label={t('tabDiary')}
+          className="flex rounded-full border border-[#e5e6de] bg-white p-1 text-xs"
+          role="radiogroup"
+        >
+          {(['raw', 'refined'] as const).map(v => (
+            <button
+              aria-checked={view === v}
+              className={`rounded-full px-4 py-1.5 transition-colors ${
+                view === v ? 'bg-[#e5ece4] font-semibold text-[#526f60]' : 'text-[#737970]'
+              }`}
+              key={v}
+              onClick={() => setView(v)}
+              role="radio"
+              type="button"
+            >
+              {v === 'raw' ? t('diaryViewRaw') : t('diaryViewRefined')}
+            </button>
+          ))}
+        </div>
+        <span className={`min-w-0 flex-1 truncate text-xs ${sync.error ? 'text-[#9c625c]' : 'text-[#94988f]'}`}>
           {sync.error ? t('syncError', { error: sync.error.slice(0, 60) }) : syncLine}
         </span>
         {sync.signedIn && !sync.syncing && (
-          <button type="button" className="card-btn" onClick={() => void syncNow()}>
+          <button
+            className="rounded-full border border-[#e5e6de] px-4 py-1.5 text-xs transition-colors hover:border-[#526f60] hover:text-[#526f60]"
+            onClick={() => void syncNow()}
+            type="button"
+          >
             {t('syncNow')}
           </button>
         )}
       </div>
 
       {entries.length === 0 ? (
-        <p className="cards-empty">{t('diaryEmpty')}</p>
+        <p className="mt-10 text-center text-sm leading-6 text-[#737970]">{t('diaryEmpty')}</p>
       ) : (
         [...byDate.entries()].map(([date, list]) => (
-          <div key={date} className="diary-day">
-            <h3 className="diary-date">{todayLabel(date, uiLang)}</h3>
-            {list.map(e => (
-              <div key={e.uid} className="diary-entry" lang={targetLang}>
-                <div className="diary-time">{timeOf(e.created_at)}</div>
-                <div className="diary-body">
-                  <div className="diary-text">{e.text}</div>
-                  {e.corrected && e.corrected !== e.text && (
-                    <div className="diary-corrected">
-                      <span className="diary-tag">{t('diaryCorrected')}:</span> {e.corrected}
-                    </div>
-                  )}
-                  {e.translation && <div className="diary-translation" lang={uiLang}>{e.translation}</div>}
+          <div className="mt-6" key={date}>
+            <h3 className="text-[11px] font-semibold tracking-[1px] text-[#94988f]">
+              {todayLabel(date, uiLang).toUpperCase()}
+            </h3>
+
+            {view === 'refined' ? (
+              <div className="mt-4 space-y-3">
+                {refined[date] && (
+                  <div className="rounded-[20px] bg-[#f0f2e9] p-6">
+                    <p className="text-[16px] leading-[1.65]" lang={targetLang}>
+                      {refined[date]!.text}
+                    </p>
+                    {refined[date]!.translation && (
+                      <p className="mt-3 rounded-lg bg-[#f1f0eb] px-3 py-2 text-sm leading-relaxed text-[#737970]" lang={uiLang}>
+                        {refined[date]!.translation}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="rounded-[20px] border border-[#e5e6de] bg-white px-5 py-4">
+                  <div className="space-y-3.5">
+                    {list.map(e => {
+                      const line = e.refined || e.corrected || e.text
+                      return (
+                        <div key={e.uid}>
+                          <p className="text-[15px] leading-[1.6]" lang={targetLang}>
+                            {line}
+                          </p>
+                          {e.translation && (
+                            <p className="mt-1 text-xs leading-relaxed text-[#737970]" lang={uiLang}>
+                              {e.translation}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="vocab-del"
-                  title={t('diaryDelete')}
-                  aria-label={t('diaryDelete')}
-                  onClick={() => remove(e.uid)}
-                >
-                  ×
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    className="flex items-center gap-2 rounded-full bg-[#526f60] px-5 py-2.5 text-xs text-white transition-colors hover:bg-[#466052] disabled:opacity-40"
+                    disabled={busyDate === date}
+                    onClick={() => void refine(date, list)}
+                    type="button"
+                  >
+                    {busyDate === date
+                      ? t('diaryRefineBusy')
+                      : refined[date]
+                        ? t('diaryRefineRebuild')
+                        : t('diaryRefineBuild')}
+                  </button>
+                </div>
               </div>
-            ))}
+            ) : (
+              <div className="mt-4 space-y-3">
+                {list.map(e => (
+                  <div
+                    className="flex items-start gap-4 rounded-[20px] border border-[#e5e6de] bg-white px-5 py-4"
+                    key={e.uid}
+                    lang={targetLang}
+                  >
+                    <span className="pt-1 text-[11px] tabular-nums text-[#94988f]">
+                      {timeOf(e.created_at)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] leading-[1.6]">{e.text}</p>
+                      {e.corrected && e.corrected !== e.text && (
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-[#737970]">
+                          <span className="mr-1 text-[10px] tracking-[0.8px] text-[#94988f]">
+                            {t('diaryCorrected').toUpperCase()}
+                          </span>
+                          {e.corrected}
+                        </p>
+                      )}
+                      {e.translation && (
+                        <p className="mt-1.5 text-xs leading-relaxed text-[#94988f]" lang={uiLang}>
+                          {e.translation}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      aria-label={t('diaryDelete')}
+                      className="shrink-0 text-base text-[#94988f] transition-colors hover:text-[#9c625c]"
+                      onClick={() => remove(e.uid)}
+                      title={t('diaryDelete')}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))
+      )}
+      {refineError && (
+        <p className="mt-4 rounded-xl border border-[#e8d5d2] bg-[#faf3f2] px-4 py-2.5 text-xs text-[#9c625c]">
+          {refineError}
+        </p>
       )}
     </section>
   )

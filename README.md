@@ -157,8 +157,8 @@ silence — verified).
 - Model picker includes a live download progress per model; sizes come from
   webllm's `vram_required_MB` (the honest tab-memory cost).
 - One LLM in memory; switching reloads it (first switch also downloads).
-- Curated model list (small → large): Gemma-3-1B-IT (default, best
-  multilingual), Llama-3.2-1B-Instruct, Qwen2.5-1.5B-Instruct, Gemma-4 E2B.
+- Curated model list (small → large): Gemma-3-1B-IT 🌐 (default),
+  Llama-3.2-1B-Instruct, Qwen2.5-1.5B-Instruct, Gemma-4 E2B.
   The 1B models run the tiny-tier pipeline (2-key tutor schema + separate
   corrections/translation/suggestions calls).
 
