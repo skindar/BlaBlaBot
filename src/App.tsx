@@ -119,7 +119,8 @@ function AppInner() {
   // Google Drive sign-in gates the diary: no account — no diary mode/tab
   const [googleSignedIn, setGoogleSignedIn] = useState(() => getSyncStatus().signedIn)
   // hands-free mic: auto-submit after this much silence
-  const HANDS_FREE_PAUSE_MS = 5000
+  // hands-free auto-submit pause: user-configurable, clamped 1–30 s
+  const HANDS_FREE_PAUSE_MS = Math.min(30_000, Math.max(1_000, settings.handsFreePauseMs ?? 3_000))
   const speakingRef = useRef(false)
   const prevStageRef = useRef<Stage>('idle')
   /** the user pressed "⏹ Стоп" — keep the mic closed even after the next reply */

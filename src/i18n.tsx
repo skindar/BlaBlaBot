@@ -206,6 +206,8 @@ const RU: Dict = {
   warnTtsUnavailable: 'Озвучка недоступна, но текст ответа получен',
   fileMs: 'мс',
   fileCached: '(кеш)',
+  handsFreePause: 'Пауза тишины до отправки: {s} с',
+  handsFreePauseHint: 'В режиме hands-free: сколько секунд тишины ждать, прежде чем отправить запись (1–30 с)',
   fileMb: 'МБ',
 
   // Cloud brain (Custom URL)
@@ -501,6 +503,8 @@ const EN: Dict = {
   warnTtsUnavailable: 'Speech is unavailable, but the reply text is here',
   fileMs: 'ms',
   fileCached: '(cached)',
+  handsFreePause: 'Silence pause before sending: {s} s',
+  handsFreePauseHint: 'Hands-free mode: how many seconds of silence to wait before the recording is sent (1–30 s)',
   fileMb: 'MB',
 
   // Cloud brain (Custom URL)

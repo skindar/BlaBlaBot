@@ -322,6 +322,22 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               value={settings.ttsSpeed}
             />
           </div>
+          <div className={rowCls}>
+            <label className={labelCls} htmlFor="set-hf-pause">
+              {t('handsFreePause', { s: Math.round((settings.handsFreePauseMs ?? 3000) / 1000) })}
+            </label>
+            <input
+              className="accent-[#526f60]"
+              id="set-hf-pause"
+              max={30000}
+              min={1000}
+              onChange={e => onChange({ handsFreePauseMs: Number(e.target.value) })}
+              step={500}
+              type="range"
+              value={settings.handsFreePauseMs ?? 3000}
+            />
+            <p className="text-[11px] leading-relaxed text-[#94988f]">{t('handsFreePauseHint')}</p>
+          </div>
         </section>
 
         {/* ---------- Models ---------- */}

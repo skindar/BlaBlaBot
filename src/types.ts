@@ -84,6 +84,8 @@ export interface Settings {
   diaryMode?: boolean
   /** hands-free mic: tap to start, auto-submit after a short silence pause */
   handsFree?: boolean
+  /** hands-free auto-submit pause length, ms (1000–30000, default 3000) */
+  handsFreePauseMs?: number
   /** show the Bench tab (hidden by default — a developer/article tool) */
   showBench?: boolean
   /** which brain writes the tutor lines: in-tab WebLLM or a cloud API */
