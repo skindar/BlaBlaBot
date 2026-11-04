@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { libT } from '../i18n'
 
 export type RecorderState = 'idle' | 'recording' | 'error'
 
@@ -40,12 +41,10 @@ function pickMimeType(): string | undefined {
 
 function micErrorMessage(err: unknown): string {
   if (err instanceof DOMException) {
-    if (err.name === 'NotAllowedError') {
-      return 'Доступ к микрофону запрещён. Разреши его в настройках сайта в браузере.'
-    }
-    if (err.name === 'NotFoundError') return 'Микрофон не найден.'
+    if (err.name === 'NotAllowedError') return libT('errMicDenied')
+    if (err.name === 'NotFoundError') return libT('errMicNotFound')
   }
-  return 'Не удалось начать запись. Проверь, что микрофон доступен браузеру.'
+  return libT('errMicGeneric')
 }
 
 export function useRecorder(
@@ -115,7 +114,7 @@ export function useRecorder(
         if (event.data.size > 0) chunksRef.current.push(event.data)
       }
       recorder.onerror = () => {
-        setError('Ошибка записи — попробуй ещё раз.')
+        setError(libT('errMicFailed'))
         cleanup()
         setState('idle')
         setRecordingMs(0)
@@ -131,7 +130,7 @@ export function useRecorder(
         setSpeechDetected(false)
         if (discarded) return
         if (blob.size < MIN_BLOB_SIZE || durationMs < MIN_DURATION_MS) {
-          setError('Слишком короткая запись — зажми кнопку и говори подольше.')
+          setError(libT('errMicTooShort'))
           return
         }
         onFinishedRef.current(blob, durationMs)

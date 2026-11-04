@@ -19,8 +19,6 @@ interface Props {
   /** hands-free mic: tap to start, auto-submit after a short silence pause */
   handsFree: boolean
   onToggleHandsFree: () => void
-  /** end the hands-free session: discard the recording, keep the mic closed */
-  onEndSession: () => void
   /** how long the user has been silent (live, only after speech) */
   silenceMs: number
   /** live mic level crossed the speech threshold at least once */
@@ -55,7 +53,6 @@ export function InputCard({
   recordingMs,
   handsFree,
   onToggleHandsFree,
-  onEndSession,
   silenceMs,
   speechDetected,
   pauseLimitMs,
@@ -212,16 +209,6 @@ export function InputCard({
             <div className="flex shrink-0 items-center gap-3">
               {recording && (
                 <span className="text-xs tabular-nums text-[#9c625c]">{formatMs(recordingMs)}</span>
-              )}
-              {handsFree && recording && (
-                <button
-                  className="rounded-full border border-[#9c625c] px-4 py-2 text-xs text-[#9c625c] transition-colors hover:bg-[#f7efee]"
-                  onClick={onEndSession}
-                  title={t('handsFreeStopHint')}
-                  type="button"
-                >
-                  {t('handsFreeStop')}
-                </button>
               )}
               <button
                 className={`flex h-14 shrink-0 items-center gap-[11px] rounded-full px-[23px] text-[15px] text-white transition-colors ${

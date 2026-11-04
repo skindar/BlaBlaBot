@@ -123,8 +123,6 @@ function AppInner() {
   const HANDS_FREE_PAUSE_MS = Math.min(30_000, Math.max(1_000, settings.handsFreePauseMs ?? 3_000))
   const speakingRef = useRef(false)
   const prevStageRef = useRef<Stage>('idle')
-  /** the user pressed "⏹ Стоп" — keep the mic closed even after the next reply */
-  const sessionStopRef = useRef(false)
   // design UI state
   const [rightPanel, setRightPanel] = useState(true)
   const [languageOpen, setLanguageOpen] = useState(false)
@@ -347,11 +345,11 @@ function AppInner() {
     if (!settings.handsFree) return
     if (stage !== 'idle' || tab !== 'conversation') return
     if (error) return
-    if (sessionStopRef.current) return
+    if (ended) return
     if (prev !== 'processing' && prev !== 'playing') return
     void recorder.start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, settings.handsFree, tab])
+  }, [stage, settings.handsFree, tab, ended])
 
   // Switching the topic starts a fresh conversation: the scenario session
   // restarts by definition (topicKey mismatch), and leaving the old history
@@ -407,15 +405,14 @@ function AppInner() {
 
   const startRecording = useCallback(() => {
     setError(null)
-    sessionStopRef.current = false
     cancelSpeech()
     if (stage === 'idle' || stage === 'playing') recorder.start()
   }, [recorder, stage])
 
-  /** Hands-free "⏹ Стоп": discard the current recording and end the loop —
-   *  no submission, no reply, the mic stays closed */
-  const endHandsFreeSession = useCallback(() => {
-    sessionStopRef.current = true
+  /** Close the mic without submitting: an in-flight recording is discarded.
+   *  Used by "End session"; the hands-free loop reopens the mic only while
+   *  the conversation is live. */
+  const stopMic = useCallback(() => {
     cancelSpeech()
     if (recorder.state === 'recording') recorder.cancel()
     setStage('idle')
@@ -465,20 +462,23 @@ function AppInner() {
 
   const resetDialog = useCallback(() => {
     cancelSpeech()
+    // a fresh conversation must not receive the phrase the user was still
+    // recording when they pressed "New conversation"
+    if (recorder.state === 'recording') recorder.cancel()
     conversation.reset(lang)
     setMessages([])
     setTimings(null)
     setSettingsOpen(false)
     setStatusText(t('newDialogStarted'))
-  }, [lang, t])
+  }, [lang, t, recorder])
 
   /** "End session" (the design): stop the mic, close the conversation,
    *  show the farewell card */
   const endSession = useCallback(() => {
-    endHandsFreeSession()
+    stopMic()
     resetDialog()
     setEnded(true)
-  }, [endHandsFreeSession, resetDialog])
+  }, [stopMic, resetDialog])
 
   const finishOnboarding = useCallback(
     (uiLang: UiLang, targetLang: TargetLang) => {
@@ -649,7 +649,6 @@ function AppInner() {
                     recordingMs={recorder.recordingMs}
                     handsFree={Boolean(settings.handsFree)}
                     onToggleHandsFree={() => updateSettings({ handsFree: !settings.handsFree })}
-                    onEndSession={endHandsFreeSession}
                     silenceMs={recorder.silenceMs}
                     speechDetected={recorder.speechDetected}
                     pauseLimitMs={HANDS_FREE_PAUSE_MS}
