@@ -227,11 +227,13 @@ export function scenarioGrounding(
   question: string | null,
 ): string {
   let block = `\nSCENARIO: you are guiding the student through the topic "${scenario.title}".`
+  block += `\nSpeak like a real person making conversation — never mention scenarios, tasks, topics or "small talk" itself.`
+  block += `\nMEMORY RULE: the conversation history above is your memory. Read it before asking anything — NEVER ask a question the student has already answered (their name, country, job, hobbies, breakfast…). Everything they told you — use it naturally in your replies.`
   if (scenario.vocab.length > 0) {
     block += `\nPreferred vocabulary: ${scenario.vocab.slice(0, 12).join(', ')}.`
   }
   if (question) {
-    block += `\nIMPORTANT: end your reply with EXACTLY this question: "${question}"`
+    block += `\nSuggested next question: "${question}" — use it only if the conversation has not covered it yet; otherwise ask your own natural follow-up about the topic.`
   }
   return block
 }

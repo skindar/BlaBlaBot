@@ -751,11 +751,12 @@ export function ensurePrescribedQuestion(reply: string, question: string | null)
   if (!question) return reply
   const parts = sentences(reply)
   if (parts.length === 0) return question
-  const lastQ = [...parts].reverse().find(s => s.includes('?'))
-  if (!lastQ) return `${parts.join(' ')} ${question}`
-  const idx = parts.lastIndexOf(lastQ)
-  parts[idx] = question
-  return parts.join(' ')
+  // the model's own question follows the conversation (the grounding MEMORY
+  // RULE keeps it from re-asking) — never swap it for the prescribed one;
+  // append the prescribed question only when the model asked nothing at all
+  const hasQuestion = parts.some(s => s.includes('?'))
+  if (hasQuestion) return parts.join(' ')
+  return `${parts.join(' ')} ${question}`
 }
 
 /** Session update after a full-tier turn asked the prescribed question */
