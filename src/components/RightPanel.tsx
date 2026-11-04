@@ -21,10 +21,19 @@ interface Props {
   onClose: () => void
 }
 
-/** The scenario the current conversation runs on */
+/** The scenario shown in the panel: the freshly picked topic wins over the
+ *  running session (a click must be visible immediately), the session wins
+ *  once it actually runs the picked topic. */
 function activeScenario(settings: Settings): Scenario {
-  const session = tutorSession.get(settings.targetLang)
-  return (session && scenarioById(session.scenarioId)) || selectScenario(settings.targetLang, settings.level, settings.extraPrompt)
+  const lang = settings.targetLang
+  const pickedId = settings.topics?.[lang]
+  const session = tutorSession.get(lang)
+  const sessionScenario = session && scenarioById(session.scenarioId)
+  if (pickedId) {
+    if (sessionScenario && session.topicKey === pickedId) return sessionScenario
+    return scenarioById(pickedId) ?? sessionScenario ?? selectScenario(lang, settings.level, settings.extraPrompt)
+  }
+  return sessionScenario || selectScenario(lang, settings.level, settings.extraPrompt)
 }
 
 export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
@@ -34,6 +43,13 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
   const [voiceOpen, setVoiceOpen] = useState(false)
   // every "explore another topic" click also rebuilds the lattice figure
   const [figureSeed, setFigureSeed] = useState(0)
+  const rotate = () => {
+    // the picked topic is an id, sticky per language: it never snaps back to
+    // an older one and survives reloads and "New conversation"
+    const next = nextScenario(scenario)
+    onChange({ topics: { ...settings.topics, [lang]: next.id } })
+    setFigureSeed(f => f + 1)
+  }
 
   useMemo(() => subscribeSync, []) // keep the import; status refreshes on remount
 
@@ -67,18 +83,20 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
             </h3>
             <Icon name="compass" size={19} />
           </div>
-          <p className="mt-4 text-[22px] leading-[1.25] tracking-[-0.6px]">{topicTitle}</p>
+          <button
+            className="mt-4 block w-full text-left"
+            onClick={rotate}
+            title={t('exploreAnother')}
+            type="button"
+          >
+            <p className="text-[22px] leading-[1.25] tracking-[-0.6px]">{topicTitle}</p>
+          </button>
           <div className="mt-4 flex justify-center">
             <TopicFigure seed={figureSeed} />
           </div>
           <button
             className="mt-3 flex items-center gap-[7px] text-xs text-[#526f60]"
-            onClick={() => {
-              // switching the topic = switching the scenario via the topic field
-              const next = nextScenario(scenario)
-              onChange({ extraPrompt: next.title })
-              setFigureSeed(f => f + 1)
-            }}
+            onClick={rotate}
             type="button"
           >
             <Icon name="shuffle" size={14} />

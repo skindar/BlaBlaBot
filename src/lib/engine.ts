@@ -113,6 +113,8 @@ export interface ProcessChatArgs {
   uiLang: UiLang
   llmKey: string
   extraPrompt?: string
+  /** explicitly chosen scenario id (the topic picker) — overrides topic text */
+  topicId?: string
   tts?: TtsSettings
   /** diary mode: supportive listener, messages go to the diary */
   diaryMode?: boolean
@@ -435,15 +437,19 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       : null
   const tiny = Boolean(tutorOption?.tiny)
   const diaryMode = Boolean(args.diaryMode)
-  const activeScenario = selectScenario(targetLang, level, extraPrompt)
+  const topicId = args.topicId?.trim() || undefined
+  const activeScenario = selectScenario(targetLang, level, extraPrompt, topicId)
+  // the session restarts when the user picks a different topic (id) — the
+  // chosen scenario sticks until the user changes it again
+  const sessionKey = topicId ?? extraPrompt
   let session = tutorSession.get(targetLang)
   if (
     history.length === 0 ||
     !session ||
     scenarioById(session.scenarioId) === null ||
-    session.topicKey !== extraPrompt
+    session.topicKey !== sessionKey
   ) {
-    session = newSession(activeScenario, extraPrompt)
+    session = newSession(activeScenario, sessionKey)
   }
   const scenario = scenarioById(session.scenarioId) ?? activeScenario
 

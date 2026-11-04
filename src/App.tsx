@@ -289,6 +289,7 @@ function AppInner() {
           uiLang: settings.uiLang,
           llmKey: settings.llmModel,
           extraPrompt: settings.extraPrompt.trim(),
+          topicId: settings.topics?.[lang],
           diaryMode: settings.diaryMode,
           tts: ttsSettings,
         })) as ChatResponse
@@ -326,7 +327,7 @@ function AppInner() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [settings.level, settings.llmModel, settings.extraPrompt, settings.uiLang, settings.ttsEngine, settings.ttsVoices, settings.phononBases, lang, t, speakTutor],
+    [settings.level, settings.llmModel, settings.extraPrompt, settings.topics, settings.uiLang, settings.ttsEngine, settings.ttsVoices, settings.phononBases, lang, t, speakTutor],
   )
 
   const handleBlob = useCallback(
@@ -351,6 +352,20 @@ function AppInner() {
     void recorder.start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, settings.handsFree, tab])
+
+  // Switching the topic starts a fresh conversation: the scenario session
+  // restarts by definition (topicKey mismatch), and leaving the old history
+  // in the prompt drags the tutor back to old questions ("What is your
+  // name?" while the chips already belong to the new scenario).
+  const topicIdRef = useRef(settings.topics?.[lang])
+  useEffect(() => {
+    const current = settings.topics?.[lang]
+    if (topicIdRef.current !== undefined && current !== topicIdRef.current) {
+      resetDialog()
+    }
+    topicIdRef.current = current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.topics, lang])
 
   // Turning hands-free off while it listens: close the mic, discard
   useEffect(() => {

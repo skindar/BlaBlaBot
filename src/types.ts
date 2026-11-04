@@ -73,6 +73,8 @@ export interface Settings {
   ttsVoices: Partial<Record<TargetLang, string>>
   /** Phonon model files base URL per target language */
   phononBases: Partial<Record<TargetLang, string>>
+  /** chosen scenario id per target language (the sidebar topic picker) */
+  topics?: Partial<Record<TargetLang, string>>
   ttsSpeed: number
   showTranslation: boolean
   /** free-form topic/instructions for the tutor (sidebar "Let's talk about…" textarea) */
