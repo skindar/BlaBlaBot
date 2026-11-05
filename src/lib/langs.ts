@@ -479,7 +479,7 @@ function withSlash(base: string): string {
  */
 export function phononVoices(lang: TargetLang, base: string): PhononVoiceInfo[] {
   if (base.startsWith(MULTILINGUAL_BASE)) {
-    return CATALOG_VOICES[lang].map(([name, id]) => ({ name, url: catalogVoiceUrl(id) }))
+    return (CATALOG_VOICES[lang] ?? []).map(([name, id]) => ({ name, url: catalogVoiceUrl(id) }))
   }
   if (lang === 'de' && !isHfUrl(base)) {
     const b = withSlash(base)
@@ -500,7 +500,10 @@ export function phononVoices(lang: TargetLang, base: string): PhononVoiceInfo[] 
 /** The first catalog voice of the language is its default
  *  (de → Annika, en → Zoey, fr → Noémie, es → Noa, pt → Manuela-Lu) */
 export function defaultPhononVoice(lang: TargetLang): string {
-  return CATALOG_VOICES[lang][0][0]
+  // Russian has no Phonon voices at all (Piper speaks it) — an empty catalog
+  // must not crash the renderer, which is exactly what it did before
+  const list = CATALOG_VOICES[lang] ?? []
+  return list[0]?.[0] ?? ''
 }
 
 /** A voice name the selected model actually has: the saved value if it is in

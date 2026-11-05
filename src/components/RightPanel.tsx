@@ -7,6 +7,7 @@ import type { Level, Settings } from '../types'
 import { useI18n } from '../i18n'
 import { Icon } from '../ui/design'
 import { langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
+import { PIPER_VOICES, piperVoiceOrDefault } from '../lib/piperTts'
 import { scenarioById, selectScenario, nextScenario, type Scenario } from '../lib/scenarios'
 import { TopicFigure } from './TopicFigure'
 import { tutorSession } from '../lib/store'
@@ -58,7 +59,17 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
   const topicTitle = settings.uiLang === 'ru' ? scenario.titleTr.ru : scenario.titleTr.en
   const words = scenario.vocab.slice(0, 3)
   const phononBase = settings.phononBases[lang] ?? langInfo(lang).phononBase
-  const voices = phononVoices(lang, phononBase)
+  // Russian speaks through Piper, so the picker lists Piper voices there
+  const piperList = PIPER_VOICES[lang]
+  const voices = piperList && piperList.length > 0
+    ? piperList.map(v => ({ name: v.id, url: '' }))
+    : phononVoices(lang, phononBase)
+  const savedVoice = piperList && piperList.length > 0
+    ? piperVoiceOrDefault(lang, settings.ttsVoices[lang])
+    : resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])
+  const voiceLabelText = piperList && piperList.length > 0
+    ? (piperList.find(v => v.id === savedVoice)?.label ?? savedVoice)
+    : savedVoice
 
   return (
     /* h-full, not h-dvh: the panel lives below the 96px header, inside the
@@ -183,7 +194,7 @@ export function RightPanel({ settings, onChange, onAddWord, onClose }: Props) {
             <span className="min-w-0 flex-1">
               <span className="block text-[11px] text-[#737970]">{t('companionVoice')}</span>
               <span className="mt-[5px] block truncate text-[13px] font-medium">
-                {resolvePhononVoice(lang, phononBase, settings.ttsVoices[lang])}
+                {voiceLabelText}
               </span>
             </span>
             <Icon name="smallChevron" size={14} />
