@@ -7,6 +7,7 @@ import type { Level, Settings, WebHealth } from '../types'
 import type { UiLang } from '../i18n'
 import { useI18n } from '../i18n'
 import { TARGET_LANG_LIST, langInfo, phononVoices, resolvePhononVoice } from '../lib/langs'
+import { PIPER_VOICES, piperVoiceOrDefault } from '../lib/piperTts'
 import { ASR_MODELS, DEFAULT_ASR_KEY } from '../lib/asr'
 import { LlmEngine, availableLlmModels, llmModelByKey } from '../lib/llm'
 import { ttsEngine } from '../lib/tts'
@@ -145,8 +146,13 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
     }
   }, [settings.ttsEngine, lang, t])
 
-  const voice =
-    settings.ttsEngine === 'phonon'
+  // Russian speaks through Piper: there is no Phonon model or voice for it,
+  // so the engine row shows "Piper" and the voice list comes from Piper too
+  const piperVoices = PIPER_VOICES[lang] ?? []
+  const usesPiper = piperVoices.length > 0
+  const voice = usesPiper
+    ? piperVoiceOrDefault(lang, settings.ttsVoices[lang])
+    : settings.ttsEngine === 'phonon'
       ? resolvePhononVoice(lang, settings.phononBases[lang] ?? info.phononBase, settings.ttsVoices[lang])
       : settings.ttsVoices[lang] ?? ''
   const setVoice = (v: string) => onChange({ ttsVoices: { ...settings.ttsVoices, [lang]: v } })
@@ -269,17 +275,30 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               <label className={labelCls} htmlFor="set-tts-engine">{t('ttsEngine')}</label>
               <select
                 className={inputCls}
+                disabled={usesPiper}
                 id="set-tts-engine"
                 onChange={e => onChange({ ttsEngine: e.target.value as Settings['ttsEngine'] })}
-                value={settings.ttsEngine}
+                value={usesPiper ? 'phonon' : settings.ttsEngine}
               >
-                <option value="phonon">{t('enginePhonon')}</option>
-                <option value="system">{t('engineSystem')}</option>
+                {usesPiper ? (
+                  <option value="phonon">{t('enginePiper', { size: '~63 МБ' })}</option>
+                ) : (
+                  <>
+                    <option value="phonon">{t('enginePhonon')}</option>
+                    <option value="system">{t('engineSystem')}</option>
+                  </>
+                )}
               </select>
             </div>
             <div className={rowCls}>
               <label className={labelCls} htmlFor="set-voice">{`${t('voiceLabel')} — ${info.nativeName}`}</label>
-              {settings.ttsEngine === 'phonon' ? (
+              {usesPiper ? (
+                <select className={inputCls} id="set-voice" onChange={e => setVoice(e.target.value)} value={voice}>
+                  {piperVoices.map(v => (
+                    <option key={v.id} value={v.id}>{v.label}</option>
+                  ))}
+                </select>
+              ) : settings.ttsEngine === 'phonon' ? (
                 <select className={inputCls} id="set-voice" onChange={e => setVoice(e.target.value)} value={voice}>
                   {phononVoices(lang, phononBase).map(v => (
                     <option key={v.name} value={v.name}>{v.name}</option>
@@ -295,7 +314,7 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               )}
             </div>
           </div>
-          {settings.ttsEngine === 'phonon' && (
+          {settings.ttsEngine === 'phonon' && !usesPiper && (
             <div className={`${rowCls} mt-4`}>
               <label className={labelCls} htmlFor="set-phonon-base">{`${t('phononBase')} — ${info.nativeName}`}</label>
               <input
