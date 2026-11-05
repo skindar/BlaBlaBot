@@ -123,6 +123,9 @@ function AppInner() {
   const HANDS_FREE_PAUSE_MS = Math.min(30_000, Math.max(1_000, settings.handsFreePauseMs ?? 3_000))
   const speakingRef = useRef(false)
   const prevStageRef = useRef<Stage>('idle')
+  /** always-current recorder handle: callbacks read state through it instead of
+   *  closing over a per-render object (keeps their dependency lists stable) */
+  const recorderRefLive = useRef<{ state: string; cancel: () => void } | null>(null)
   // design UI state
   const [rightPanel, setRightPanel] = useState(true)
   const [languageOpen, setLanguageOpen] = useState(false)
@@ -389,6 +392,7 @@ function AppInner() {
     [sendChat, stage, recorder],
   )
 
+  recorderRefLive.current = { state: recorder.state, cancel: recorder.cancel }
   const prevRecorderState = useRef(recorder.state)
   useEffect(() => {
     if (recorder.state === 'recording') {
@@ -414,10 +418,11 @@ function AppInner() {
    *  the conversation is live. */
   const stopMic = useCallback(() => {
     cancelSpeech()
-    if (recorder.state === 'recording') recorder.cancel()
+    const rec = recorderRefLive.current
+    if (rec && rec.state === 'recording') rec.cancel()
     setStage('idle')
     setStatusText(t('readyToTalk'))
-  }, [recorder, t])
+  }, [t])
 
   const speakWord = useCallback(
     (text: string) => {
@@ -464,13 +469,14 @@ function AppInner() {
     cancelSpeech()
     // a fresh conversation must not receive the phrase the user was still
     // recording when they pressed "New conversation"
-    if (recorder.state === 'recording') recorder.cancel()
+    const rec = recorderRefLive.current
+    if (rec && rec.state === 'recording') rec.cancel()
     conversation.reset(lang)
     setMessages([])
     setTimings(null)
     setSettingsOpen(false)
     setStatusText(t('newDialogStarted'))
-  }, [lang, t, recorder])
+  }, [lang, t])
 
   /** "End session" (the design): stop the mic, close the conversation,
    *  show the farewell card */
