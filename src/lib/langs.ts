@@ -229,7 +229,7 @@ export const FAREWELL_RE: Record<TargetLang, RegExp> = {
   fr: /\b(au revoir|[àa] bient[ôo]t|bonne nuit)\b/i,
   es: /\b(adi[óo]s|hasta luego|hasta ma[ñn]ana|buenas noches)\b/i,
   pt: /\b(tchau|adeus|até logo|boa noite)\b/i,
-  ru: /\b(пока|до свидания|до встречи|спокойной ночи|прощай)\b/i,
+  ru: /(?:^|[^а-яё])(пока|до свидания|до встречи|спокойной ночи|прощай)(?![а-яё])/i,
 }
 
 /** "The student opens with a greeting" — greet back, then the first question */
@@ -239,7 +239,7 @@ export const GREETING_RE: Record<TargetLang, RegExp> = {
   fr: /^\s*(salut|bonjour|coucou)\b/i,
   es: /^\s*(hola|buenas|buenos\s+d[ií]as)\b/i,
   pt: /^\s*(ol[áa]|oi|bom\s+dia|boa\s+(tarde|noite))\b/i,
-  ru: /^\s*(привет|здравствуй|здравствуйте|доброе\s+утро|добрый\s+(день|вечер)|хай)\b/i,
+  ru: /^\s*(привет|здравствуй|здравствуйте|доброе\s+утро|добрый\s+(день|вечер)|хай)(?![а-яё])/i,
 }
 
 /** "My name is X" — the student introduced themselves */
@@ -249,7 +249,7 @@ export const INTRO_RE: Record<TargetLang, RegExp> = {
   fr: /\b(?:je\s+m'appelle|mon\s+nom\s+est|je\s+suis)\s+([A-ZÀ-Þ][\p{L}-]+)/iu,
   es: /\b(?:me\s+llamo|mi\s+nombre\s+es|soy)\s+([A-ZÁ-ÚÑ][\p{L}-]+)/iu,
   pt: /\b(?:meu\s+nome\s+[ée]|chamo-me|eu\s+sou\s+o|eu\s+sou)\s+([A-ZÁ-ÚÃ][\p{L}-]+)/iu,
-  ru: /\b(?:меня\s+зовут|моё\s+имя|я)\s+([А-ЯЁ][\p{L}-]+)/iu,
+  ru: /(?:^|[^а-яё])(?:меня\s+зовут|моё\s+имя)\s+([А-ЯЁ][а-яё-]+)/iu,
 }
 
 /** Deterministic reaction to an introduction — never trust a 1B model with it */
@@ -320,7 +320,7 @@ export const NEGATION_RE: Record<TargetLang, RegExp> = {
   fr: /\b(ne|pas|jamais|rien|non)\b/i,
   es: /\b(no|nunca|nada)\b/i,
   pt: /\b(n[ãa]o|nunca|nada)\b/i,
-  ru: /\b(не|нет|никогда|ничего)\b/i,
+  ru: /(?:^|[^а-яё])(не|нет|никогда|ничего)(?![а-яё])/i,
 }
 
 /** "{topic}" → transition line when the scenario rotates */
