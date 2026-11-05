@@ -124,8 +124,41 @@ export function buildDiaryRefineMessages(
       content: `You are a diary editor for a ${target} student at ${level} level.
 The student told about their day in ${target}; the numbered lines below are what they said.
 Rewrite these lines into ONE coherent diary page in ${target}: simple first-person prose in the past tense, at the student's level, pleasant to re-read later.
-Keep ALL the facts exactly as told — add nothing, invent nothing, judge nothing. Fix grammar mistakes silently.
+Rules:
+- keep the ORDER of events exactly as the student told them (first line first)
+- state each fact ONCE — never repeat an event that was said twice
+- keep every fact exactly as told — add nothing, invent nothing, judge nothing
+- drop filler words and false starts; fix grammar silently
+- write in first person about the student: "ich war müde", never "es war müde"
 Output ONLY the diary text — no comments, no quotes, no JSON.${suffix}`,
+    },
+    { role: 'user', content: lines.map((l, i) => `${i + 1}. ${l}`).join('\n') },
+  ]
+}
+
+/** Step 1 of the diary's refined view: pull the day's facts out of the raw
+ *  lines as short, reusable statements (what happened, with whom, how it felt).
+ *  Facts are what later work is built on — the literary page is step 2. */
+export function buildDiaryFactsMessages(
+  level: Level,
+  targetLang: TargetLang,
+  lines: string[],
+): LlmMessage[] {
+  const target = langNameForPrompt(targetLang)
+  return [
+    {
+      role: 'system',
+      content: `You turn what a ${target} student said about their day into a list of facts.
+The numbered lines are their own words — messy, repetitive, with false starts.
+Return each fact as ONE short ${target} statement, one per line, IN THE SAME ORDER the student told them.
+Rules:
+- use ONLY words and meanings from the student's lines: never invent a fact, never add a detail, never infer
+- copy the vocabulary the student used; do not paraphrase into new words
+- merge a fact that is repeated into ONE line, at the position of its FIRST mention
+- drop filler ("also", "ähm", "na ja") and false starts
+- each line: max 10 words, plain ${level} ${target}, no numbering, no bullets, no quotes
+- if the student only asked a question or said nothing factual, output exactly NONE
+Output ONLY the lines.`,
     },
     { role: 'user', content: lines.map((l, i) => `${i + 1}. ${l}`).join('\n') },
   ]

@@ -185,7 +185,7 @@ function AppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleSignedIn])
   useEffect(() => {
-    if (!googleSignedIn && tab === 'diary') setTab('conversation')
+    // the diary works offline; no Google account required
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleSignedIn])
 
@@ -536,7 +536,6 @@ function AppInner() {
           settings={settings}
           active={tab}
           googleSignedIn={googleSignedIn}
-          diaryLocked={!googleSignedIn}
           onNav={setTab}
           onNewConversation={() => {
             resetDialog()

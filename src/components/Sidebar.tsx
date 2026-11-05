@@ -17,7 +17,6 @@ interface Props {
   active: NavTab
   /** Google sign-in gates the diary */
   googleSignedIn: boolean
-  diaryLocked: boolean
   onNav: (tab: NavTab) => void
   onNewConversation: () => void
   onOpenSettings: () => void
@@ -45,7 +44,6 @@ export function Sidebar({
   settings,
   active,
   googleSignedIn,
-  diaryLocked,
   onNav,
   onNewConversation,
   onOpenSettings,
@@ -78,7 +76,9 @@ export function Sidebar({
 
         <nav aria-label="Primary navigation" className="mt-8 space-y-[5px]">
           {nav.map(({ label, tab, icon, badge }) => {
-            const locked = tab === 'diary' && diaryLocked
+            // the diary lives locally; Google is only for syncing it across
+            // devices, so the tab is never locked
+            const locked = false
             return (
               <button
                 className={`flex h-[46px] w-full items-center gap-3 rounded-xl px-3 text-sm transition-colors ${

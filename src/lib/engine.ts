@@ -31,7 +31,7 @@ import {
   buildSingleTranslateMessages,
   buildSuggestionsMessages,
   buildDiaryRefineMessages,
-  buildDiaryPhraseRefineMessages,
+  buildDiaryFactsMessages,
   buildVocabMessages,
   scenarioGrounding,
   vocabNotRealDefaultComment,
@@ -352,19 +352,6 @@ function cleanSuggestions(raw: Suggestion[], uiLang: UiLang, targetLang: TargetL
     if (out.length >= 3) break
   }
   return out
-}
-
-/** Diary auto-refine: clean ONE phrase for the refined view — bare-text
- *  contract for tiny models; a failed or drifting refine keeps the raw line. */
-async function refineDiaryPhrase(text: string, level: Level, targetLang: TargetLang): Promise<string> {
-  const call = await chatBrain(buildDiaryPhraseRefineMessages(level, targetLang, text), {
-    temperature: 0.3,
-    maxTokens: 120,
-  })
-  const refined = stripQuoteWrappers(stripThink(call.text.trim()))
-  if (!refined || refined.length > 300) return ''
-  if (targetLang !== 'en' && looksEnglish(refined)) return ''
-  return refined
 }
 
 export function processChat(args: ProcessChatArgs): Promise<ChatResponse> {
@@ -944,18 +931,10 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
       }
       if (corrected === userText) corrected = undefined
     }
-    const entry = diary.append(targetLang, userText, userTranslation, corrected)
-    // Auto-refine for the diary's refined view: strip fillers and false
-    // starts, fix grammar — in the background, never blocking the reply.
-    // Runs through the shared queue so it does not contend with the turn.
-    void enqueue(async () => {
-      try {
-        const refined = await refineDiaryPhrase(userText, level, targetLang)
-        if (refined) diary.patchRefined(entry.uid, refined)
-      } catch {
-        /* the raw + corrected line stays — refine is a nicety */
-      }
-    })
+    diary.append(targetLang, userText, userTranslation, corrected)
+    // No per-line background refine: it cost one LLM call per sentence and
+    // competed with the conversation on small local models. The day is
+    // refined on demand (facts + literary page) in the Diary tab.
   }
 
   // ---- TTS: prepare the selected engine (actual speech starts from the UI) ----
@@ -1030,8 +1009,10 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
 }
 
 export interface DiaryRefineResult {
-  /** coherent diary page in the target language */
+  /** literary diary page in the target language */
   text: string
+  /** structured facts extracted from the day (target language, one per line) */
+  facts: string[]
   /** UI-language translation ('' when unavailable) */
   translation: string
 }
@@ -1057,7 +1038,16 @@ export async function processDiaryRefine(args: {
     const call = await chatBrain(buildDiaryRefineMessages(level, targetLang, lines, languageRetry), {
       temperature: 0.5,
     })
-    const text = stripQuoteWrappers(stripThink(call.text.trim()))
+    let text = stripQuoteWrappers(stripThink(call.text.trim()))
+    // small models often keep the input's numbering ("1. … 2. …") in the
+    // literary page — strip it and join the lines into prose
+    if (/^\s*\d+[.)]\s/m.test(text)) {
+      text = text
+        .split('\n')
+        .map(l => l.replace(/^\s*\d+[.)]\s*/, '').trim())
+        .filter(Boolean)
+        .join(' ')
+    }
     return text.length > 0 && text.length <= 4000 ? text : ''
   }
 
@@ -1065,6 +1055,38 @@ export async function processDiaryRefine(args: {
   if (!text || (targetLang !== 'en' && looksEnglish(text))) {
     const retry = await refineOnce(true)
     if (retry && !(targetLang !== 'en' && looksEnglish(retry))) text = retry
+  }
+
+  // Step 1 (before the page is translated): the day's facts as short
+  // statements. This is what later work is built on — flashcards, reviews.
+  let facts: string[] = []
+  try {
+    const factsCall = await chatBrain(buildDiaryFactsMessages(level, targetLang, lines), {
+      temperature: 0.2,
+      maxTokens: 300,
+    })
+    const raw = stripThink(factsCall.text)
+    // vocabulary the student actually used — a "fact" built from words they
+    // never said is an invented one (small models do this: "Später stwamme auf")
+    const sourceWords = new Set(
+      lines.flatMap(l => l.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []),
+    )
+    const isGrounded = (line: string): boolean => {
+      const words = line.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+      const content = words.filter(w => w.length > 3)
+      if (content.length === 0) return true
+      const known = content.filter(w => sourceWords.has(w)).length
+      return known / content.length >= 0.4
+    }
+    facts = raw
+      .split('\n')
+      .map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').replace(/^["«»„“]+|["«»„“]+$/g, '').trim())
+      .filter(l => l.length > 0 && l.length <= 120 && l.toUpperCase() !== 'NONE')
+      .filter(isGrounded)
+      .slice(0, 12)
+    if (targetLang !== 'en' && facts.length > 0 && facts.every(f => looksEnglish(f))) facts = []
+  } catch {
+    /* facts are an enhancement — the literary page still lands */
   }
   if (!text) throw new PipelineError(libT('errLlmFailed', { reason: libT('modelError') }))
 
@@ -1082,7 +1104,7 @@ export async function processDiaryRefine(args: {
     /* the refined page works without a translation */
   }
 
-  return { text, translation }
+  return { text, facts, translation }
 }
 
 export interface VocabResult {

@@ -464,8 +464,10 @@ export interface DiaryRefined {
   lang: TargetLang
   /** YYYY-MM-DD */
   date: string
-  /** coherent diary text in the target language */
+  /** literary first-person page, pleasant to re-read (target language) */
   text: string
+  /** structured facts extracted from the day, one per line (target language) */
+  facts: string[]
   /** UI-language translation ('' when it could not be produced) */
   translation: string
   updated_at: string
@@ -477,10 +479,10 @@ export const diaryRefined = {
     return all.find(r => r.lang === lang && r.date === date) ?? null
   },
 
-  save(lang: TargetLang, date: string, text: string, translation: string): void {
+  save(lang: TargetLang, date: string, text: string, facts: string[], translation: string): void {
     const all = readJson<DiaryRefined[]>(DIARY_REFINED_KEY, [])
     const next = all.filter(r => !(r.lang === lang && r.date === date))
-    next.push({ lang, date, text, translation, updated_at: new Date().toISOString() })
+    next.push({ lang, date, text, facts, translation, updated_at: new Date().toISOString() })
     writeJson(DIARY_REFINED_KEY, next)
   },
 

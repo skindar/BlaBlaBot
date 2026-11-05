@@ -80,7 +80,7 @@ export function DiaryView({ active, targetLang, uiLang, level, llmModel }: Props
     try {
       const lines = list.map(e => (e.corrected && e.corrected.trim() ? e.corrected : e.text))
       const result = await processDiaryRefine({ lines, level, targetLang, uiLang, llmKey: llmModel })
-      diaryRefined.save(targetLang, date, result.text, result.translation)
+      diaryRefined.save(targetLang, date, result.text, result.facts, result.translation)
       setRefined(prev => ({ ...prev, [date]: diaryRefined.get(targetLang, date) }))
     } catch (err) {
       setRefineError(err instanceof Error ? err.message : t('diaryRefineFailed'))
@@ -153,8 +153,26 @@ export function DiaryView({ active, targetLang, uiLang, level, llmModel }: Props
 
             {view === 'refined' ? (
               <div className="mt-4 space-y-3">
+                {refined[date] && refined[date]!.facts?.length > 0 && (
+                  <div className="rounded-[20px] border border-[#e5e6de] bg-white p-5">
+                    <h4 className="text-[10px] font-semibold tracking-[1.1px] text-[#94988f]">
+                      {t('diaryFacts').toUpperCase()}
+                    </h4>
+                    <ul className="mt-3 space-y-1.5">
+                      {refined[date]!.facts.map((fact, i) => (
+                        <li className="flex gap-2 text-[14px] leading-snug" key={i} lang={targetLang}>
+                          <span className="text-[#526f60]">·</span>
+                          {fact}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {refined[date] && (
                   <div className="rounded-[20px] bg-[#f0f2e9] p-6">
+                    <h4 className="mb-3 text-[10px] font-semibold tracking-[1.1px] text-[#737970]">
+                      {t('diaryLiterary').toUpperCase()}
+                    </h4>
                     <p className="text-[16px] leading-[1.65]" lang={targetLang}>
                       {refined[date]!.text}
                     </p>
