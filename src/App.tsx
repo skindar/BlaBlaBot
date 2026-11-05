@@ -126,6 +126,9 @@ function AppInner() {
   /** always-current recorder handle: callbacks read state through it instead of
    *  closing over a per-render object (keeps their dependency lists stable) */
   const recorderRefLive = useRef<{ state: string; cancel: () => void } | null>(null)
+  /** the current playback is a replay of an old line ("Listen"), not the
+   *  tutor's fresh reply — replaying must not restart the hands-free loop */
+  const replayingRef = useRef(false)
   // design UI state
   const [rightPanel, setRightPanel] = useState(true)
   const [languageOpen, setLanguageOpen] = useState(false)
@@ -244,9 +247,10 @@ function AppInner() {
 
   /** Speak a tutor reply with the selected engine (Phonon or system voice) */
   const speakTutor = useCallback(
-    (text: string) => {
+    (text: string, replay = false) => {
       cancelSpeech()
       speakingRef.current = true
+      replayingRef.current = replay
       setStage('playing')
       setStatusText(t('tutorSpeaking', { name: t('appName') }))
       // Watchdog: speechSynthesis/AudioBuffer onended events occasionally
@@ -279,6 +283,8 @@ function AppInner() {
 
   const sendChat = useCallback(
     async (args: { blob?: Blob; text?: string }) => {
+      // a real turn supersedes any replay flag left by an interrupted "Listen"
+      replayingRef.current = false
       setStage('processing')
       setStatusText(t('recognizing'))
       try {
@@ -350,6 +356,12 @@ function AppInner() {
     if (error) return
     if (ended) return
     if (prev !== 'processing' && prev !== 'playing') return
+    // "Listen" replays an old line while the conversation is idle — finishing
+    // that playback must not open the mic as if a turn had just completed
+    if (replayingRef.current) {
+      replayingRef.current = false
+      return
+    }
     void recorder.start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, settings.handsFree, tab, ended])
@@ -409,6 +421,7 @@ function AppInner() {
 
   const startRecording = useCallback(() => {
     setError(null)
+    replayingRef.current = false
     cancelSpeech()
     if (stage === 'idle' || stage === 'playing') recorder.start()
   }, [recorder, stage])
@@ -638,7 +651,7 @@ function AppInner() {
                       showTranslation={settings.showTranslation}
                       targetLang={lang}
                       uiLang={settings.uiLang}
-                      onReplay={msg => speakTutor(msg.text)}
+                      onReplay={msg => speakTutor(msg.text, true)}
                       onSuggest={handleText}
                       onSavePhrase={text => void addToVocab(text)}
                       onStartHint={text => {
