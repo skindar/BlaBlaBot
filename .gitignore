@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# secrets
+.env
+*.env
+
+# Piper runtime assets copied from node_modules at dev/build time
+public/onnx/
+public/piper/
+public/worker/
+
+# OS junk
+.DS_Store
