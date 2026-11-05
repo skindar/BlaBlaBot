@@ -10,6 +10,7 @@ import { asrEngine } from '../lib/asr'
 import { llmEngine, llmModelByKey } from '../lib/llm'
 import { ttsEngine } from '../lib/tts'
 import { phononEngine } from '../lib/ttsPhonon'
+import { piperEngine } from '../lib/piperTts'
 import type { TtsEngineKind, WebHealth, WebModelHealth } from '../types'
 
 type ModelKey = 'asr' | 'llm' | 'tts'
@@ -52,6 +53,26 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
     let cancelled = false
 
     async function loadTts() {
+      // Russian: Piper (Phonon has no Russian model)
+      if (targetLang === 'ru') {
+        patch('tts', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
+        const t = performance.now()
+        try {
+          await piperEngine.ensure()
+          if (cancelled) return
+          patch('tts', {
+            state: 'ready',
+            load_ms: Math.round(performance.now() - t),
+            progress: 1,
+            progressText: `Piper · ${ttsVoice || 'Ирина'}`,
+          })
+        } catch (err) {
+          if (cancelled) return
+          const reason = err instanceof Error ? err.message : String(err)
+          patch('tts', { state: 'error', load_ms: Math.round(performance.now() - t), error: reason })
+        }
+        return
+      }
       if (ttsKind === 'phonon') {
         const base = phononBase || langInfo(targetLang).phononBase
         patch('tts', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
@@ -131,6 +152,10 @@ export function useEngine({ targetLang, llmKey, asrKey, ttsKind, ttsVoice, phono
           // transformers.js progress texts mention progress% only while downloading
           if (/%/.test(p.text)) sawNetwork = true
         })
+        if (cancelled) return
+        // compile the kernels now, not on the student's first phrase
+        patch('asr', { progress: 1, progressText: libT('asrWarming') })
+        await asrEngine.warmUp(targetLang)
         if (cancelled) return
         recordLoad({
           kind: 'asr',

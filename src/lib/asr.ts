@@ -4,7 +4,7 @@
 
 import { pipeline, env } from '@huggingface/transformers'
 import { libT } from '../i18n'
-import type { TargetLang } from './langs'
+import { langInfo, type TargetLang } from './langs'
 import type { LoadProgress } from './llm'
 
 export interface AsrModelOption {
@@ -101,10 +101,33 @@ export class AsrEngine {
     throw new AsrError(libT('errAsrLoad', { reason: lastError instanceof Error ? lastError.message : String(lastError) }))
   }
 
-  /** Transcribe the target language from mono Float32 @ 16 kHz */
-  async transcribe(pcm16k: Float32Array, targetLang: TargetLang): Promise<string> {
+  /**
+   * Warm the pipeline: the first call compiles the WebGPU kernels (5–15 s on
+   * a cold tab). Running it right after load turns the first real turn from
+   * "looks frozen" into a normal one. Silence input is cheap and produces ''.
+   */
+  async warmUp(targetLang: TargetLang): Promise<void> {
+    if (this.pipe === null) return
+    const silence = new Float32Array(16000 * 0.4)
+    try {
+      await this.pipe(silence, { language: langInfo(targetLang).whisper, task: 'transcribe' })
+    } catch {
+      // warming is best-effort — a real transcribe will surface any real error
+    }
+  }
+
+  /** Transcribe mono Float32 @ 16 kHz in the target language.
+   *  Long inputs are chunked by Whisper itself (chunk_length_s) instead of
+   *  being pre-split by the caller — one pass, no cut-word losses. */
+  async transcribe(pcm16k: Float32Array, targetLang: TargetLang, opts: { long?: boolean } = {}): Promise<string> {
     if (this.pipe === null) throw new AsrError(libT('errAsrNotLoaded'))
-    const out = await this.pipe(pcm16k, { language: targetLang, task: 'transcribe' })
+    const seconds = pcm16k.length / 16000
+    const out = await this.pipe(pcm16k, {
+      language: langInfo(targetLang).whisper,
+      task: 'transcribe',
+      // long monologues (diary mode): let Whisper window the audio itself
+      ...(opts.long || seconds > 30 ? { chunk_length_s: 30, stride_length_s: 5 } : {}),
+    })
     return out.text.trim()
   }
 }

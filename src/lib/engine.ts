@@ -44,6 +44,7 @@ import { contextWindowFor } from './llm'
 import { conversation, diary, lookupDictionary, tutorSession, vocab } from './store'
 import { ttsEngine } from './tts'
 import { phononEngine } from './ttsPhonon'
+import { piperEngine, piperVoiceOrDefault } from './piperTts'
 import {
   advanceFullSession,
   ensurePrescribedQuestion,
@@ -227,6 +228,7 @@ const TARGET_WH_RE: Record<TargetLang, RegExp> = {
   fr: /(^|\s)(comment|quoi|o[uù]|quand|pourquoi|quel(le|le|s)?|qui|combien)/i,
   es: /(^|\s)(c[oó]mo|qu[eé]|d[oó]nde|cu[aá]ndo|cu[aá]l|qui[eé]n|cu[aá]nto)/i,
   pt: /(^|\s)(como|que|onde|quando|qual|quem|quanto)/i,
+  ru: /(^|\s)(как|что|где|когда|почему|зачем|какой|какая|какие|кто|сколько)/i,
 }
 
 /** Last-ditch rescue for a translation that dropped the "?" of a yes/no
@@ -407,13 +409,20 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
     const trimmed = trimSilence(pcm, vad, 16000)
     // hands-free monologues: feed Whisper speech chunks, not one long
     // silence-heavy blob — that is where it starts looping "I don't I don…"
-    const segments = splitAtSilence(trimmed, 16000)
+    // Short utterances (the normal case) go through Whisper in ONE pass: the
+    // old per-silence segmentation ran the encoder once per fragment and was
+    // the main source of "first transcription is slow". Long monologues are
+    // split and transcribed in PARALLEL (diary/free-talk).
+    const longUtterance = trimmed.length / 16000 > 15
+    const segments = longUtterance ? splitAtSilence(trimmed, 16000, { splitAboveMs: 15_000 }) : [trimmed]
     let text: string
     try {
       let joined = ''
-      for (const seg of segments) {
-        const part = await asrEngine.transcribe(seg, targetLang)
-        if (part) joined = joined ? `${joined} ${part.trim()}` : part.trim()
+      if (segments.length === 1) {
+        joined = await asrEngine.transcribe(segments[0], targetLang, { long: longUtterance })
+      } else {
+        const parts = await Promise.all(segments.map(seg => asrEngine.transcribe(seg, targetLang)))
+        joined = parts.filter(Boolean).map(p => p.trim()).join(' ')
       }
       text = collapseAsrRepetition(joined)
     } catch (err) {
@@ -953,7 +962,13 @@ async function processChatInner(args: ProcessChatArgs): Promise<ChatResponse> {
   const tTts = nowMs()
   let warning: string | null = null
   const ttsChoice = args.tts
-  if (ttsChoice?.engine === 'phonon') {
+  if (targetLang === 'ru') {
+    try {
+      await piperEngine.ensure()
+    } catch {
+      warning = libT('warnPhononNotReady')
+    }
+  } else if (ttsChoice?.engine === 'phonon') {
     try {
       await phononEngine.ensure(targetLang, ttsChoice.phononBase, ttsChoice.voice, () => undefined)
     } catch {
@@ -1149,6 +1164,12 @@ export async function processVocab(
 
 /** Speak a tutor line or word with the selected engine (called from the UI) */
 export async function speak(text: string, opts: SpeakOptions): Promise<void> {
+  // Russian has no Phonon model — Piper speaks it (and only it needs Piper)
+  if (opts.targetLang === 'ru') {
+    const result = await piperEngine.speak(text, piperVoiceOrDefault('ru', opts.voice), opts.rate)
+    opts.onFirstAudio?.(result.firstAudioMs)
+    return
+  }
   if (opts.engine === 'phonon') {
     const result = await phononEngine.speak(text, opts.rate, opts.voice)
     opts.onFirstAudio?.(result.firstAudioMs)

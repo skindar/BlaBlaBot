@@ -99,14 +99,17 @@ function templateReaction(lang: TargetLang, turn: ScenarioTurn | null, userText:
   return negative ? turn.reactions.negative : turn.reactions.positive
 }
 
+const GREETINGS: Record<TargetLang, string> = {
+  de: 'Hallo! Schön, dass du da bist.',
+  en: 'Hello! Great to see you.',
+  fr: 'Bonjour ! Ravi de te voir.',
+  es: '¡Hola! Me alegro de verte.',
+  pt: 'Olá! Que bom ver você.',
+  ru: 'Привет! Рада тебя видеть.',
+}
+
 function greetingFor(lang: TargetLang): string {
-  return {
-    de: 'Hallo! Schön, dass du da bist.',
-    en: 'Hello! Great to see you.',
-    fr: 'Bonjour ! Ravi de te voir.',
-    es: '¡Hola! Me alegro de verte.',
-    pt: 'Olá! Que bom ver você.',
-  }[lang]
+  return GREETINGS[lang]
 }
 
 export function looksEnglishDrift(text: string, targetLang: TargetLang): boolean {
@@ -610,6 +613,14 @@ const DIARY_QUESTIONS: Record<TargetLang, Array<{ text: string; tr: TrPair }>> =
     { text: 'Parece interessante! E o que você fez então?', tr: { ru: 'Звучит интересно! И что ты сделал(а) тогда?', en: 'That sounds interesting! And what did you do then?' } },
     { text: 'Sério? Conta mais!', tr: { ru: 'Правда? Расскажи ещё!', en: 'Really? Tell me more!' } },
   ],
+  ru: [
+    { text: 'И что было дальше?', tr: { ru: 'И что было дальше?', en: 'And what happened next?' } },
+    { text: 'Понятно. А что было после?', tr: { ru: 'Понятно. А что было после?', en: 'I see. And what came after that?' } },
+    { text: 'Что ты почувствовал?', tr: { ru: 'Что ты почувствовал?', en: 'How did you feel?' } },
+    { text: 'Звучит интересно! Что ты сделал потом?', tr: { ru: 'Звучит интересно! Что ты сделал потом?', en: 'That sounds interesting! And what did you do then?' } },
+    { text: 'Правда? Расскажи ещё!', tr: { ru: 'Правда? Расскажи ещё!', en: 'Really? Tell me more!' } },
+    { text: 'И как всё продолжилось?', tr: { ru: 'И как всё продолжилось?', en: 'And how did it go on?' } },
+  ],
 }
 
 const DIARY_OPENERS: Record<TargetLang, { text: string; tr: TrPair }> = {
@@ -618,6 +629,7 @@ const DIARY_OPENERS: Record<TargetLang, { text: string; tr: TrPair }> = {
   fr: { text: 'Raconte-moi : comment s’est passée ta journée ?', tr: { ru: 'Расскажи мне: как прошёл твой день?', en: 'Tell me: how was your day?' } },
   es: { text: 'Cuéntame: ¿cómo estuvo tu día?', tr: { ru: 'Расскажи мне: как прошёл твой день?', en: 'Tell me: how was your day?' } },
   pt: { text: 'Me conta: como foi o seu dia?', tr: { ru: 'Расскажи мне: как прошёл твой день?', en: 'Tell me: how was your day?' } },
+  ru: { text: 'Расскажи мне: как прошёл твой день?', tr: { ru: 'Расскажи мне: как прошёл твой день?', en: 'Tell me: how was your day?' } },
 }
 
 /** Deterministic supportive floor reactions */
@@ -627,6 +639,7 @@ const DIARY_FLOOR: Record<TargetLang, string[]> = {
   fr: ['Je vois.', 'D’accord !', 'Oh, intéressant !', 'Merci de me le raconter !'],
   es: ['Ya veo.', '¡Entendido!', '¡Qué interesante!', '¡Gracias por contarme!'],
   pt: ['Entendi.', 'Tudo bem!', 'Ah, interessante!', 'Obrigado por me contar!'],
+  ru: ['Понимаю.', 'Хорошо!', 'О, интересно!', 'Спасибо, что рассказал!'],
 }
 
 /** Continuation chips: how the student goes on telling about their day */
@@ -636,6 +649,7 @@ const DIARY_CHIPS: Record<TargetLang, Array<{ text: string }>> = {
   fr: [{ text: 'Et puis j’ai …' }, { text: 'Plus tard …' }, { text: 'Voilà ma journée.' }],
   es: [{ text: 'Y luego …' }, { text: 'Más tarde …' }, { text: 'Ese fue mi día.' }],
   pt: [{ text: 'E depois eu …' }, { text: 'Mais tarde …' }, { text: 'Esse foi o meu dia.' }],
+  ru: [{ text: 'А потом я …' }, { text: 'Позже …' }, { text: 'Вот такой был день.' }],
 }
 
 export interface DiaryTurnArgs {

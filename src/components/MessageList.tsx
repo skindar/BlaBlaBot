@@ -29,6 +29,7 @@ const STARTER_TEXTS: Record<TargetLang, string[]> = {
   fr: ['Bonjour ! Je veux parler de mon week-end.', 'Salut ! Pose-moi une question, s’il te plaît.'],
   es: ['¡Hola! Quiero hablar de mi fin de semana.', '¡Hola! Hazme una pregunta, por favor.'],
   pt: ['Olá! Quero falar sobre meu fim de semana.', 'Olá! Me faz uma pergunta, por favor.'],
+  ru: ['Привет! Хочу рассказать о своих выходных.', 'Привет! Задай мне вопрос, пожалуйста.'],
 }
 
 export function MessageList({

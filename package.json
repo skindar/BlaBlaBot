@@ -12,6 +12,7 @@
     "@huggingface/transformers": "^4.3.2",
     "@mlc-ai/web-llm": "^0.2.87",
     "phonon-tts": "^0.6.0",
+    "piper-tts-web": "^1.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

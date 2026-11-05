@@ -164,6 +164,11 @@ export class PhononEngine {
     onProgress: (p: PhononLoadProgress) => void,
   ): Promise<PhononInstance> {
     const model = buildModel(lang, base)
+    // Russian has no Phonon model — the Piper engine handles it (engine.ts
+    // routes ru to piperTts). This is a guard, not a normal path.
+    if (lang === 'ru') {
+      return Promise.reject(new Error('phonon has no Russian model — use Piper'))
+    }
     return PhononTTS.load({
       lang,
       quant: 'q8',

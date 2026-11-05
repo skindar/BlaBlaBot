@@ -20,3 +20,8 @@ Language tutor web/
 # Secrets
 .hf-token
 *.env
+# Piper runtime assets (~108 MB) are copied from node_modules at dev/build time
+# by the piperAssets() plugin — never committed, never in the repo history
+public/onnx/
+public/piper/
+public/worker/

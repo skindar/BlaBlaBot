@@ -85,11 +85,22 @@ export function detectSpeech(samples: Float32Array, sr: number): VadResult {
 export function splitAtSilence(
   samples: Float32Array,
   sr: number,
-  opts: { minSilenceMs?: number; minSegmentMs?: number; maxSegmentMs?: number } = {},
+  opts: {
+    minSilenceMs?: number
+    minSegmentMs?: number
+    maxSegmentMs?: number
+    /** recordings shorter than this are NOT split — one Whisper pass is
+     *  cheaper and never loses words at a cut point */
+    splitAboveMs?: number
+  } = {},
 ): Float32Array[] {
   const minSilenceMs = opts.minSilenceMs ?? 900
   const minSegmentMs = opts.minSegmentMs ?? 700
   const maxSegmentMs = opts.maxSegmentMs ?? 28000
+  const splitAboveMs = opts.splitAboveMs ?? 15000
+  // a normal A1–A2 utterance (a few seconds) goes through in one pass
+  const totalMs = (samples.length / sr) * 1000
+  if (totalMs <= splitAboveMs) return [samples]
   const { dbs } = frameDb(samples, sr, FRAME_MS)
   if (dbs.length === 0) return [samples]
   let peak = -Infinity
@@ -110,11 +121,30 @@ export function splitAtSilence(
   }
   const segments: Float32Array[] = []
   let start = 0
+  // a fragment shorter than minSegmentMs (a single word, "ja", "ok") is speech
+  // too: keep it by extending into the neighbouring span instead of dropping it
   const pushSeg = (from: number, to: number) => {
-    if ((to - from) * FRAME_MS < minSegmentMs) return
-    const seg = samples.subarray(from * frameLen, Math.min(to * frameLen, samples.length))
-    if (seg.length > 0) segments.push(seg)
+    const segLen = to - from
+    if (segLen <= 0) return
+    if (segLen * FRAME_MS < minSegmentMs) {
+      if (segments.length > 0) {
+        // glue to the previous segment: re-slice from its start through `to`
+        const prevStart = lastStart
+        segments[segments.length - 1] = samples.subarray(
+          prevStart * frameLen,
+          Math.min(to * frameLen, samples.length),
+        )
+      } else {
+        // first fragment is short — extend it forward instead
+        segments.push(samples.subarray(0, Math.min(to * frameLen, samples.length)))
+      }
+      lastStart = 0
+      return
+    }
+    lastStart = from
+    segments.push(samples.subarray(from * frameLen, Math.min(to * frameLen, samples.length)))
   }
+  let lastStart = 0
   for (const [cutAt, resumeAt] of cuts) {
     pushSeg(start, cutAt)
     start = resumeAt

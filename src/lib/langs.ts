@@ -3,7 +3,7 @@
 
 import type { UiLang } from '../i18n'
 
-export type TargetLang = 'de' | 'en' | 'fr' | 'es' | 'pt'
+export type TargetLang = 'de' | 'en' | 'fr' | 'es' | 'pt' | 'ru'
 
 // ---------- Public Phonon sources on Hugging Face ----------
 // Commits are pinned so a browser-cached download can never drift when the
@@ -72,6 +72,8 @@ export interface TargetLangInfo {
   informalAddress: string
   /** article hint for the dictionary prompt */
   articleHint: string
+  /** Piper voice id for languages Phonon does not cover (ru) */
+  piperVoice?: string
 }
 
 export const TARGET_LANGS: Record<TargetLang, TargetLangInfo> = {
@@ -150,9 +152,26 @@ export const TARGET_LANGS: Record<TargetLang, TargetLangInfo> = {
     informalAddress: 'use informal "você"',
     articleHint: 'keep the article for nouns (o/a)',
   },
+  ru: {
+    code: 'ru',
+    bcp47: 'ru-RU',
+    nativeName: 'Русский',
+    nameRu: 'Русский',
+    nameEn: 'Russian',
+    flag: '🇷🇺',
+    whisper: 'ru',
+    // Phonon has no Russian model; the Piper VITS voice speaks it (~63 MB
+    // ONNX, 22 kHz, CPU wasm — faster than real time)
+    phononBase: MULTILINGUAL_BASE,
+    piperVoice: 'ru_RU-irina-medium',
+    hasOfflineDict: false,
+    usesArticles: false,
+    informalAddress: 'use informal "ты"',
+    articleHint: 'use the base dictionary form',
+  },
 }
 
-export const TARGET_LANG_LIST: TargetLang[] = ['de', 'en', 'fr', 'es', 'pt']
+export const TARGET_LANG_LIST: TargetLang[] = ['de', 'en', 'fr', 'es', 'pt', 'ru']
 
 export function isTargetLang(v: string): v is TargetLang {
   return v in TARGET_LANGS
@@ -186,6 +205,7 @@ export const TUTOR_FALLBACK: Record<TargetLang, string> = {
   fr: "Désolé, je n'ai pas compris.",
   es: 'Perdona, no lo he entendido.',
   pt: 'Desculpa, não entendi.',
+  ru: 'Извини, я не понял.',
 }
 
 // ---------- Tutor scaffold: per-language dialog mechanics ----------
@@ -199,6 +219,7 @@ export const TARGET_WH_RE: Record<TargetLang, RegExp> = {
   fr: /(^|\s)(comment|quoi|o[uù]|quand|pourquoi|quel(le|le|s)?|qui|combien)(?=\W|$)/i,
   es: /(^|\s)(c[oó]mo|qu[eé]|d[oó]nde|cu[aá]ndo|cu[aá]l|qui[eé]n|cu[aá]nto)(?=\W|$)/i,
   pt: /(^|\s)(como|que|onde|quando|qual|quem|quanto)(?=\W|$)/i,
+  ru: /(^|\s)(как|что|где|когда|почему|зачем|какой|какая|какие|кто|сколько)(?=\W|$)/i,
 }
 
 /** "The student says goodbye" — end the lesson politely, no new question */
@@ -208,6 +229,7 @@ export const FAREWELL_RE: Record<TargetLang, RegExp> = {
   fr: /\b(au revoir|[àa] bient[ôo]t|bonne nuit)\b/i,
   es: /\b(adi[óo]s|hasta luego|hasta ma[ñn]ana|buenas noches)\b/i,
   pt: /\b(tchau|adeus|até logo|boa noite)\b/i,
+  ru: /\b(пока|до свидания|до встречи|спокойной ночи|прощай)\b/i,
 }
 
 /** "The student opens with a greeting" — greet back, then the first question */
@@ -217,6 +239,7 @@ export const GREETING_RE: Record<TargetLang, RegExp> = {
   fr: /^\s*(salut|bonjour|coucou)\b/i,
   es: /^\s*(hola|buenas|buenos\s+d[ií]as)\b/i,
   pt: /^\s*(ol[áa]|oi|bom\s+dia|boa\s+(tarde|noite))\b/i,
+  ru: /^\s*(привет|здравствуй|здравствуйте|доброе\s+утро|добрый\s+(день|вечер)|хай)\b/i,
 }
 
 /** "My name is X" — the student introduced themselves */
@@ -226,6 +249,7 @@ export const INTRO_RE: Record<TargetLang, RegExp> = {
   fr: /\b(?:je\s+m'appelle|mon\s+nom\s+est|je\s+suis)\s+([A-ZÀ-Þ][\p{L}-]+)/iu,
   es: /\b(?:me\s+llamo|mi\s+nombre\s+es|soy)\s+([A-ZÁ-ÚÑ][\p{L}-]+)/iu,
   pt: /\b(?:meu\s+nome\s+[ée]|chamo-me|eu\s+sou\s+o|eu\s+sou)\s+([A-ZÁ-ÚÃ][\p{L}-]+)/iu,
+  ru: /\b(?:меня\s+зовут|моё\s+имя|я)\s+([А-ЯЁ][\p{L}-]+)/iu,
 }
 
 /** Deterministic reaction to an introduction — never trust a 1B model with it */
@@ -235,6 +259,7 @@ export const INTRO_REACTION: Record<TargetLang, string> = {
   fr: 'Enchanté, {name} !',
   es: '¡Mucho gusto, {name}!',
   pt: 'Prazer em conhecer você, {name}!',
+  ru: 'Приятно познакомиться, {name}!',
 }
 
 export const INTRO_REACTION_TR: Record<TargetLang, { ru: string; en: string }> = {
@@ -243,6 +268,7 @@ export const INTRO_REACTION_TR: Record<TargetLang, { ru: string; en: string }> =
   fr: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
   es: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
   pt: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
+  ru: { ru: 'Приятно познакомиться, {name}!', en: 'Nice to meet you, {name}!' },
 }
 
 /** Questions that ask for the student's name (any language mix) */
@@ -254,6 +280,7 @@ export const TUTOR_FAREWELL: Record<TargetLang, string> = {
   fr: 'Au revoir ! C’était super de parler avec toi. À bientôt !',
   es: '¡Adiós! Fue genial hablar contigo. ¡Hasta pronto!',
   pt: 'Tchau! Foi ótimo falar com você. Até logo!',
+  ru: 'Пока! Было здорово поговорить. До скорого!',
 }
 
 /** Fixed translations of the deterministic farewell: translating a constant
@@ -280,6 +307,10 @@ export const TUTOR_FAREWELL_TRANSLATION: Record<TargetLang, Record<'ru' | 'en', 
     ru: 'Пока! Было очень приятно поговорить. До скорого!',
     en: 'Bye! It was great talking to you. See you soon!',
   },
+  ru: {
+    ru: 'Пока! Было очень приятно поговорить. До скорого!',
+    en: 'Bye! It was great talking to you. See you soon!',
+  },
 }
 
 /** Negation words — pick the "negative" reaction template */
@@ -289,6 +320,7 @@ export const NEGATION_RE: Record<TargetLang, RegExp> = {
   fr: /\b(ne|pas|jamais|rien|non)\b/i,
   es: /\b(no|nunca|nada)\b/i,
   pt: /\b(n[ãa]o|nunca|nada)\b/i,
+  ru: /\b(не|нет|никогда|ничего)\b/i,
 }
 
 /** "{topic}" → transition line when the scenario rotates */
@@ -298,6 +330,7 @@ export const TUTOR_TRANSITION: Record<TargetLang, string> = {
   fr: 'Très bien ! Nouveau sujet : {topic}.',
   es: '¡Muy bien! Nuevo tema: {topic}.',
   pt: 'Muito bem! Novo tema: {topic}.',
+  ru: 'Отлично! Новая тема: {topic}.',
 }
 
 /** Fixed UI-language translation of the transition line */
@@ -419,6 +452,8 @@ const CATALOG_VOICES: Record<TargetLang, Array<[name: string, id: string]>> = {
     ['Otávio', 'JYtmeaysoaR0Wybf'],
     ['Marcelo', 'qDeAnE4L4bk0BRz1'],
   ],
+  // Russian runs on Piper, not Phonon — no catalog voices needed
+  ru: [],
 }
 
 // Local German voices (hosted next to the phonon-40m-de model) — the same
