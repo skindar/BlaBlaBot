@@ -13,10 +13,6 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npx vite build
+        run: npx vite build --minify=false
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           # Public OAuth client id (no client secret); optional — without it
