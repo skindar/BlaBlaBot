@@ -20,6 +20,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -32,8 +33,9 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npx vite build
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           # Public OAuth client id (no client secret); optional — without it
           # the app is fully local and the Drive sign-in is disabled.
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
