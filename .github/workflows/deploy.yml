@@ -13,6 +13,11 @@ permissions:
   pages: write
   id-token: write
 
+# A slow/old run must never deploy after a newer commit and overwrite Pages.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,7 +34,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npx vite build --minify=false
+        run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           # Public OAuth client id (no client secret); optional — without it
