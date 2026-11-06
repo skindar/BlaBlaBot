@@ -29,6 +29,7 @@ export interface ModelManagerDeps {
   brainKind: (settings: Settings) => BrainKind
   llmLabel: (key: string) => string
   asrDevice: () => string
+  systemAsrAvailable?: () => boolean
 }
 
 export class ModelManager implements ModelManagerPort {
@@ -136,6 +137,18 @@ export class ModelManager implements ModelManagerPort {
   }
 
   private async loadAsr(settings: Settings, run: number): Promise<void> {
+    if (settings.asrEngine === 'system') {
+      if (!this.deps.systemAsrAvailable?.()) {
+        this.patch('asr', {
+          state: 'error',
+          error: libT('errSystemAsrUnsupported'),
+          progressText: libT('errSystemAsrUnsupported'),
+        })
+        return
+      }
+      this.patch('asr', { state: 'ready', loadMs: 0, progress: 1, progressText: libT('asrSystemReady') })
+      return
+    }
     this.patch('asr', { state: 'loading', error: '', progress: 0, progressText: libT('modelLoading') })
     const t = this.deps.clock.nowMs()
     let sawNetwork = false
@@ -215,6 +228,7 @@ function modelInputsChanged(a: Settings, b: Settings): boolean {
     a.targetLang !== b.targetLang ||
     a.llmModel !== b.llmModel ||
     a.asrModel !== b.asrModel ||
+    a.asrEngine !== b.asrEngine ||
     a.ttsEngine !== b.ttsEngine ||
     JSON.stringify(a.ttsVoices) !== JSON.stringify(b.ttsVoices) ||
     JSON.stringify(a.phononBases) !== JSON.stringify(b.phononBases) ||

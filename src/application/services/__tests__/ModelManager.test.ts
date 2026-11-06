@@ -21,7 +21,7 @@ class FakeLoader implements LlmLoaderPort {
   }
 }
 
-function build(settings: Settings) {
+function build(settings: Settings, systemAsrAvailable = true) {
   const llm = new FakeLoader()
   const asr = new FakeAsr()
   const speech = new FakeSpeech()
@@ -38,6 +38,7 @@ function build(settings: Settings) {
     brainKind: s => s.brain,
     llmLabel: key => `label:${key}`,
     asrDevice: () => 'WebGPU',
+    systemAsrAvailable: () => systemAsrAvailable,
   })
   manager.apply(settings)
   return { manager, llm, asr, speech, telemetry, configureBrain }
@@ -70,6 +71,28 @@ describe('ModelManager', () => {
     await vi.waitFor(() => expect(ctx.manager.status().models.llm.state).toBe('ready'))
     expect(ctx.llm.ensureCalls).toEqual([])
     expect(ctx.manager.status().llmCurrent).toBe('cloud')
+  })
+
+  it('skips Whisper when the system recognizer is selected', async () => {
+    const settings: Settings = {
+      ...defaultSettings('ru', { llmModel: 'gemma-3-1b', asrModel: 'base' }),
+      asrEngine: 'system',
+    }
+    const ctx = build(settings)
+    await vi.waitFor(() => expect(ctx.manager.status().ready).toBe(true))
+    expect(ctx.manager.status().models.asr.state).toBe('ready')
+    expect(ctx.asr.ensureCalls).toBe(0)
+  })
+
+  it('reports a clear error when system ASR is unavailable', async () => {
+    const settings: Settings = {
+      ...defaultSettings('ru', { llmModel: 'gemma-3-1b', asrModel: 'base' }),
+      asrEngine: 'system',
+    }
+    const ctx = build(settings, false)
+    await vi.waitFor(() => expect(ctx.manager.status().models.asr.state).toBe('error'))
+    expect(ctx.manager.status().models.asr.error).toContain('недоступно')
+    expect(ctx.manager.status().ready).toBe(false)
   })
 
   it('does not reload models when only the level changes', async () => {

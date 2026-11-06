@@ -17,6 +17,7 @@ export function defaultSettings(
     level: 'A2',
     llmModel: defaults.llmModel,
     asrModel: defaults.asrModel,
+    asrEngine: 'whisper',
     ttsEngine: 'phonon',
     ttsVoices: {},
     phononBases: {},

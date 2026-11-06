@@ -132,7 +132,13 @@ describe('TurnService guards', () => {
   it('refuses to run before the ASR model is loaded', async () => {
     const ctx = build()
     ctx.asr.loadedKey = null
-    await expect(ctx.turns.process({ text: 'Hallo' }, options)).rejects.toBeInstanceOf(ModelsNotReadyError)
+    await expect(ctx.turns.process({ blob: new Blob(['x']) }, options)).rejects.toBeInstanceOf(ModelsNotReadyError)
+  })
+
+  it('accepts typed text from a system recognizer without a Whisper model', async () => {
+    const ctx = build()
+    ctx.asr.loadedKey = null
+    await expect(ctx.turns.process({ text: 'Hallo' }, options)).resolves.toMatchObject({ userText: 'Hallo' })
   })
 
   it('refuses to run when a different local model is active', async () => {

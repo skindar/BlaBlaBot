@@ -71,6 +71,16 @@ export function FlashcardsView({ active, speakWord, llmModel, targetLang, uiLang
     }
   }, [active, refresh])
 
+  // A word added from a chat selection/right panel must appear here without
+  // waiting for a tab switch.
+  useEffect(() => {
+    return services.bus.subscribe(change => {
+      if (change.kind === 'vocab' && (!change.lang || change.lang === targetLang)) {
+        void refresh()
+      }
+    })
+  }, [services.bus, refresh, targetLang])
+
   useEffect(() => {
     setQueue(q => {
       if (q.length === 0) return items.filter(i => !i.known).map(i => i.id)

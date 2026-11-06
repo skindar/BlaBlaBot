@@ -68,7 +68,9 @@ export class FakeAsr implements AsrPort {
   loadedKey: string | null = 'fake-asr'
   device: 'webgpu' | 'wasm' | null = 'webgpu'
   transcript = 'Ich heiße Anna.'
+  ensureCalls = 0
   ensure(_key: string, onProgress: (p: LoadProgress) => void): Promise<void> {
+    this.ensureCalls++
     onProgress({ progress: 1, text: 'ready' })
     return Promise.resolve()
   }

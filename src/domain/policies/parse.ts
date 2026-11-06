@@ -428,6 +428,38 @@ export interface VocabLookup {
 }
 
 /** Port of parse_vocab_json */
+export interface VocabTranslation {
+  translation: string
+  partOfSpeech: string
+  example: string
+  exampleTranslation: string
+}
+
+/** Translation-only vocabulary response: the selected word is already in the
+ *  studied language, so we never ask the model to verify or replace it. */
+export function parseVocabTranslation(raw: string): VocabTranslation | null {
+  const cleaned = cleanRaw(raw)
+  for (const candidate of jsonCandidates(cleaned)) {
+    let data: unknown
+    try {
+      data = JSON.parse(candidate)
+    } catch {
+      continue
+    }
+    if (typeof data !== 'object' || data === null) continue
+    const dict = data as Record<string, unknown>
+    const translation = dict.translation
+    if (typeof translation !== 'string' || !translation.trim()) continue
+    return {
+      translation: translation.trim(),
+      partOfSpeech: strOrEmpty(dict.part_of_speech ?? dict.partOfSpeech),
+      example: strOrEmpty(dict.example),
+      exampleTranslation: strOrEmpty(dict.example_translation ?? dict.exampleTranslation),
+    }
+  }
+  return null
+}
+
 export function parseVocabJson(raw: string): VocabLookup | null {
   const cleaned = cleanRaw(raw)
   for (const candidate of jsonCandidates(cleaned)) {

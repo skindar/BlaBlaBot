@@ -122,6 +122,8 @@ export interface Settings {
   level: Level
   llmModel: string
   asrModel: string
+  /** local Whisper or the browser's system recognizer (Web Speech API) */
+  asrEngine: 'whisper' | 'system'
   ttsEngine: TtsEngineKind
   /** voice per target language (Phonon name or system voiceURI) */
   ttsVoices: Partial<Record<TargetLang, string>>

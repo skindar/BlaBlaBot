@@ -2,6 +2,7 @@
 // application services. Tests build services directly with fakes; the app
 // builds them here.
 
+import { isWebSpeechAsrSupported } from '../shared/platform'
 import { BrainRouter } from '../infrastructure/llm/brainRouter'
 import { DEFAULT_LLM_KEY, availableLlmModels, contextWindowFor, isKnownLlmKey, llmModelByKey } from '../infrastructure/llm/catalog'
 import { WebLlmEngine } from '../infrastructure/llm/webLlmEngine'
@@ -140,6 +141,7 @@ export function createContainer(): AppServices {
     brainKind: s => s.brain,
     llmLabel: key => llmModelByKey(key).label,
     asrDevice: () => (asr.device === 'webgpu' ? 'WebGPU' : 'WASM'),
+    systemAsrAvailable: isWebSpeechAsrSupported,
   })
 
   let started = false

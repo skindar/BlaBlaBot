@@ -80,12 +80,41 @@ If it is a REAL ${target} word or common phrase:
   "example_translation": "${explain} translation of the example"
 }
 
+Inflected forms are REAL words: use the dictionary/base form in "word" and translate it into ${explain}.
 If it is NOT a real ${target} word (made-up, typo, misspelled, or not ${target} at all) NEVER invent a translation:
 {
   "exists": false,
   "word": "the text as given",
   "comment": "short ${explain} explanation of what might be wrong or what the user meant"
 }`
+}
+
+/** Simple vocabulary contract: the user selected a word in the language
+ *  being studied, so this call ONLY translates it into the UI language. It
+ *  must not decide whether the word exists, "correct" it to another lemma, or
+ *  return an English translation when the UI is not English. */
+export function buildVocabTranslationMessages(
+  targetLang: TargetLang,
+  uiLang: 'ru' | 'en',
+  word: string,
+  strict = false,
+): LlmMessage[] {
+  const target = langNameForPrompt(targetLang)
+  const explain = uiLangNameForPrompt(uiLang)
+  const suffix = strict
+    ? `\nSTRICT: your previous translation was the source word or the wrong language. Translate the ${target} word into ${explain} only; do not echo the input.`
+    : ''
+  return [
+    {
+      role: 'system',
+      content: `You are a ${target}-to-${explain} dictionary. Translate the ${target} word into ${explain}.
+Return ONLY this JSON:
+{"translation": "short ${explain} translation", "part_of_speech": "part of speech in ${explain}", "example": "one short ${target} example", "example_translation": "${explain} translation of the example"}
+The translation MUST be in ${explain}; never return the source word as the translation.
+For a single selected word return a 1–3 word gloss, never a sentence, an explanation, or instructions like "how to say...". Do not add comments.${suffix}`,
+    },
+    { role: 'user', content: word },
+  ]
 }
 
 /** Diary auto-refine: clean ONE spoken phrase — remove fillers and false
@@ -113,25 +142,34 @@ export function buildDiaryRefineMessages(
   lines: string[],
   /** retry after the text came out in the wrong language */
   languageRetry = false,
+  /** second attempt after the model copied the raw lines */
+  forceRewrite = false,
 ): LlmMessage[] {
   const target = langNameForPrompt(targetLang)
-  const suffix =
+  const suffix = [
     languageRetry && target !== 'English'
       ? `\nCRITICAL LANGUAGE RULE: write the diary ONLY in ${target} — every single word.`
-      : ''
+      : '',
+    forceRewrite
+      ? `\nSTRICT REWRITE: your previous attempt copied the student's raw words. Rewrite the whole page in your own words: shorter, literary, 3–6 sentences, no fillers, no verbatim lines. Do not quote the input.`
+      : '',
+  ].join('')
   return [
     {
       role: 'system',
       content: `You are a diary editor for a ${target} student at ${level} level.
 The student told about their day in ${target}; the numbered lines below are what they said.
-Rewrite these lines into ONE coherent diary page in ${target}: simple first-person prose in the past tense, at the student's level, pleasant to re-read later.
+Rewrite these lines into ONE short literary diary paragraph in ${target}: first person, past tense, at the student's level, pleasant to re-read later.
+Length: 3–6 sentences, at most 90 words.
 Rules:
 - keep the ORDER of events exactly as the student told them (first line first)
 - state each fact ONCE — never repeat an event that was said twice
 - keep every fact exactly as told — add nothing, invent nothing, judge nothing
-- drop filler words and false starts; fix grammar silently
+- REWRITE in your own words; do not copy the student's lines verbatim
+- remove fillers, repetitions, false starts and meta-commentary completely
+- fix grammar silently; no bullets, no numbering, no quotes
 - write in first person about the student: "ich war müde", never "es war müde"
-Output ONLY the diary text — no comments, no quotes, no JSON.${suffix}`,
+Output ONLY the diary paragraph — no comments, no quotes, no JSON.${suffix}`,
     },
     { role: 'user', content: lines.map((l, i) => `${i + 1}. ${l}`).join('\n') },
   ]

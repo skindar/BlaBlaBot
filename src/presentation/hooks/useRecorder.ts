@@ -15,6 +15,9 @@ export interface UseRecorderOptions {
   /** a recording ended without any speech reaching the mic — nothing was sent.
    *  The UI uses this for its calm "nothing heard" note. */
   onNoSpeech?: () => void
+  /** false for a system recognizer: its own transcript decides whether the
+   *  turn exists, so the local VAD must not discard the take first */
+  requireSpeech?: boolean
 }
 
 interface UseRecorderResult {
@@ -152,7 +155,7 @@ export function useRecorder(
         // Only confirmed speech (≥250 ms over the threshold) may become a
         // turn. A short clack/noise used to set loudMs > 0 and was sent to
         // ASR, where silence Whisper hallucinated "Делаем на письмо.".
-        if (shouldDiscardRecording(meterActiveRef.current, speechDetectedRef.current)) {
+        if (optionsRef.current.requireSpeech !== false && shouldDiscardRecording(meterActiveRef.current, speechDetectedRef.current)) {
           optionsRef.current.onNoSpeech?.()
           return
         }

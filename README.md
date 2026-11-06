@@ -108,7 +108,7 @@ npm run test
 npm run test:coverage
 ```
 
-Covered by unit tests (142 tests):
+Covered by unit tests (158 tests):
 
 - reply/translation/vocabulary/suggestion JSON parsing, including repaired
   and plain-text fallbacks;
@@ -190,6 +190,21 @@ The mic button is a real Stop control while the app is busy:
 A turn generation counter in `useChatSession` prevents a late reply from being
 appended or spoken after Stop; `manualStopRef` prevents MediaRecorder's late
 `onstop` and the hands-free auto-start effect from reopening the mic.
+
+## Speech recognition
+
+Two engines are available in Settings:
+
+- **Whisper** (tiny/base/small) — local ONNX Runtime Web, private/offline; the
+  default remains `base`.
+- **System (Web Speech API)** — zero model download and instant recognition,
+  but Chrome/Edge usually use a cloud service and Firefox has no support. The
+  app runs the recorder in parallel for VAD, submits the live transcript, and
+  skips the Whisper download entirely.
+
+Research on Russian browser ASR — Vosk, GigaAM v3, T-one, Parakeet and why
+Whisper small is the easiest accuracy upgrade — is in
+[docs/ASR_RESEARCH.md](docs/ASR_RESEARCH.md).
 
 ## Tutor controller and hybrid phase
 

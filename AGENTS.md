@@ -19,7 +19,7 @@
 
 ## Current context
 
-- Done: full UI port + layered rewrite; 142 unit tests; typecheck/build green.
+- Done: full UI port + layered rewrite; 158 unit tests; typecheck/build green.
 - Verified e2e in Chromium/Metal WebGPU: gemma-3-1b loads and produces a real
   tutor turn (translation + persisted history + bench metrics); the German →
   Russian switch loads Piper and synthesises speech (first audio ~3.8 s).
@@ -41,6 +41,15 @@
   and discards silence; during processing/playback it cancels the pending turn.
   The generation token/manual-stop latch prevents late replies and hands-free
   reopen. Already displayed answers are kept.
+- Simplified vocabulary add: the selected word is trusted and stored as-is;
+  only its translation is requested (offline dictionary first for German).
+  Punctuation is stripped, translations must be in the UI language, meta
+  explanations are rejected/extracted and the card list refreshes on the
+  vocab event. No exists/language/lemma guessing.
+- Fixed: diary refinement (shorter literary prompt, echo detection + strict
+  rewrite, visible build CTA).
+- Added: system Web Speech ASR engine (no Whisper download; live transcript,
+  VAD in parallel, graceful fallback) plus docs/ASR_RESEARCH.md.
 - Added: B+D tutor rework: external scenario JSON, ScenarioSpec controller
   (guided steps, prescribed question/chips, phase), hybrid free phase after
   the last guided step for full-tier models, voice-name tutor persona.

@@ -141,6 +141,19 @@ export function DiaryView({ active, targetLang, uiLang, level, llmModel }: Props
 
             {view === 'refined' ? (
               <div className="mt-4 space-y-3">
+                {!refined[date] && (
+                  <div className="rounded-[20px] border border-[#e5e6de] bg-white px-5 py-4">
+                    <p className="text-sm leading-relaxed text-[#737970]">{t('diaryRefineEmpty')}</p>
+                    <button
+                      className="mt-3 rounded-full bg-[#526f60] px-5 py-2.5 text-xs text-white disabled:opacity-40"
+                      disabled={busyDate === date}
+                      onClick={() => void refine(date)}
+                      type="button"
+                    >
+                      {busyDate === date ? t('diaryRefineBusy') : t('diaryRefineBuild')}
+                    </button>
+                  </div>
+                )}
                 {refined[date] && refined[date]!.facts?.length > 0 && (
                   <div className="rounded-[20px] border border-[#e5e6de] bg-white p-5">
                     <h4 className="text-[10px] font-semibold tracking-[1.1px] text-[#94988f]">

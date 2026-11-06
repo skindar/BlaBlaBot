@@ -14,6 +14,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { Sidebar, type NavTab } from './components/Sidebar'
 import { useChatSession } from './hooks/useChatSession'
 import { useRecorder } from './hooks/useRecorder'
+import { useSystemAsr } from './hooks/useSystemAsr'
 import { useHealth, useServices, useSettings } from './context'
 import { useSyncStatus } from './context'
 import { TARGET_LANG_LIST, langInfo } from '../domain/policies/languages'
@@ -58,6 +59,7 @@ export function ChatApp(): JSX.Element {
   /** set by Stop / New chat: hands-free must not reopen the mic by itself */
   const manualStopRef = useRef(false)
   const recorderRefLive = useRef<{ state: string; cancel: () => void } | null>(null)
+  const startRecordingRef = useRef<() => void>(() => undefined)
 
   // UI language: string catalog + html lang
   useEffect(() => {
@@ -103,20 +105,48 @@ export function ChatApp(): JSX.Element {
     async (args: { blob?: Blob; text?: string }) => {
       replayingRef.current = false
       setStatusText(t('recognizing'))
-      const data = await chat.send(args)
+      let timer: number | null = null
+      const timeout = new Promise<'timeout'>(resolve => {
+        timer = window.setTimeout(() => resolve('timeout'), 60_000)
+      })
+      const data = await Promise.race([chat.send(args), timeout])
+      if (timer !== null) window.clearTimeout(timer)
+      if (data === 'timeout') {
+        chat.cancelTurn()
+        setError(t('errTurnTimeout'))
+        setStatusText(t('readyToTalk'))
+        return
+      }
       if (data) setStatusText(data.warning ?? t('answerReady'))
       else setStatusText(t('readyToTalk'))
     },
-    [chat, t],
+    [chat, setError, t],
   )
+
+  const systemAsr = useSystemAsr()
+
+  useEffect(() => {
+    if (systemAsr.error) setError(systemAsr.error)
+  }, [systemAsr.error, setError])
 
   const handleBlob = useCallback(
     async (blob: Blob) => {
       // A late MediaRecorder onstop after Stop must not start a new turn.
       if (manualStopRef.current) return
+      if (settings.asrEngine === 'system') {
+        const text = await systemAsr.stop()
+        if (text) {
+          await sendChat({ text })
+        } else {
+          setStage('idle')
+          setStatusText(t('readyToTalk'))
+          setNotice(t('errNothingHeard'))
+        }
+        return
+      }
       await sendChat({ blob })
     },
-    [sendChat],
+    [sendChat, settings.asrEngine, systemAsr, setStage, setNotice, t],
   )
 
   // Hands-free loop: when the tutor finishes speaking, the mic opens again.
@@ -132,7 +162,7 @@ export function ChatApp(): JSX.Element {
       replayingRef.current = false
       return
     }
-    void recorder.start()
+    startRecordingRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, settings.handsFree, tab, ended, error])
 
@@ -156,13 +186,17 @@ export function ChatApp(): JSX.Element {
   const recorder = useRecorder(handleBlob, {
     autoStopOnSilenceMs: settings.handsFree ? handsFreePauseMs : undefined,
     onNoSpeech: () => setNotice(t('errNothingHeard')),
+    requireSpeech: settings.asrEngine !== 'system',
   })
 
   recorderRefLive.current = { state: recorder.state, cancel: recorder.cancel }
 
   useEffect(() => {
-    if (recorder.error) setError(recorder.error)
-  }, [recorder.error, setError])
+    if (recorder.error) {
+      systemAsr.cancel()
+      setError(recorder.error)
+    }
+  }, [recorder.error, setError, systemAsr])
 
   const prevRecorderState = useRef(recorder.state)
   useEffect(() => {
@@ -183,10 +217,13 @@ export function ChatApp(): JSX.Element {
       if (stage === 'processing') return
       manualStopRef.current = false
       if (stage === 'playing') chat.cancelSpeech()
-      if (stage === 'recording') recorder.cancel()
+      if (stage === 'recording') {
+        systemAsr.cancel()
+        recorder.cancel()
+      }
       void sendChat({ text })
     },
-    [chat, recorder, sendChat, stage],
+    [chat, recorder, sendChat, stage, systemAsr],
   )
 
   const startRecording = useCallback(() => {
@@ -195,23 +232,32 @@ export function ChatApp(): JSX.Element {
     replayingRef.current = false
     manualStopRef.current = false
     chat.cancelSpeech()
+    if (settings.asrEngine === 'system') {
+      if (!systemAsr.supported) {
+        setError(t('errSystemAsrUnsupported'))
+        return
+      }
+      systemAsr.start(langInfo(lang).bcp47)
+    }
     if (stage === 'idle' || stage === 'playing') void recorder.start()
-  }, [chat, recorder, setError, setNotice, stage])
+  }, [chat, lang, recorder, setError, setNotice, settings.asrEngine, stage, systemAsr, t])
+  startRecordingRef.current = startRecording
 
   const stopMic = useCallback(() => {
     manualStopRef.current = true
+    systemAsr.cancel()
     chat.cancelTurn()
     if (recorderRefLive.current?.state === 'recording') recorderRefLive.current.cancel()
     setStage('idle')
     setStatusText(t('readyToTalk'))
-  }, [chat, setStage, t])
+  }, [chat, setStage, systemAsr, t])
 
   const resetDialog = useCallback(() => {
-    manualStopRef.current = true
+    stopMic()
     chat.reset(lang)
     setSettingsOpen(false)
     setStatusText(t('newDialogStarted'))
-  }, [chat, lang, t])
+  }, [chat, lang, stopMic, t])
 
   const openChat = useCallback(
     (id: string) => {
@@ -373,6 +419,9 @@ export function ChatApp(): JSX.Element {
                 </button>
                 {languageOpen && (
                   <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border border-[#e5e6de] bg-white p-1.5 text-xs shadow-lg">
+                    <p className="px-3 pb-1 pt-2 text-[10px] font-semibold tracking-[1px] text-[#94988f]">
+                      {t('learningLanguage').toUpperCase()}
+                    </p>
                     {TARGET_LANG_LIST.map(code => {
                       const info = langInfo(code)
                       return (

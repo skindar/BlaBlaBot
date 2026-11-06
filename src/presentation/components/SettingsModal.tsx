@@ -9,6 +9,7 @@ import { useI18n } from '../i18n'
 import { TARGET_LANG_LIST, langInfo, phononVoices, resolvePhononVoice } from '../../domain/policies/languages'
 import { PIPER_VOICES, piperVoiceOrDefault } from '../../domain/policies/piperVoices'
 import { useServices, useSyncStatus } from '../context'
+import { isWebSpeechAsrSupported } from '../../shared/platform'
 import { CLOUD_PROVIDER_PROFILES, cloudProviderById } from '../../domain/policies/cloudProviders'
 
 interface Props {
@@ -114,6 +115,7 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
   const llmOptions = catalog.llmModels()
   const currentLlm = catalog.llmModel(settings.llmModel)
   const webgpuOk = catalog.webgpuSupported()
+  const systemAsrSupported = isWebSpeechAsrSupported()
   const [systemVoices, setSystemVoices] = useState<Array<{ uri: string; label: string }>>([])
 
   useEffect(() => {
@@ -410,21 +412,40 @@ export function SettingsModal({ settings, onChange, health, onClose, onReset }: 
               </div>
             )}
             <div className={rowCls}>
-              <label className={labelCls} htmlFor="set-asr">{t('asrModel')}</label>
+              <label className={labelCls} htmlFor="set-asr-engine">{t('asrEngine')}</label>
               <select
                 className={inputCls}
-                id="set-asr"
-                onChange={e => onChange({ asrModel: e.target.value })}
-                value={settings.asrModel}
+                id="set-asr-engine"
+                onChange={e => onChange({ asrEngine: e.target.value as Settings['asrEngine'] })}
+                value={settings.asrEngine ?? 'whisper'}
               >
-                {catalog.asrModels().map(o => (
-                  <option key={o.key} value={o.key}>
-                    {o.label} ({o.size})
-                  </option>
-                ))}
+                <option value="whisper">{t('asrEngineWhisper')}</option>
+                <option disabled={!systemAsrSupported} value="system">
+                  {t('asrEngineSystem')}
+                </option>
               </select>
-              {settings.asrModel !== catalog.defaultAsrKey && <p className="hint-note" />}
+              <p className="text-[11px] leading-relaxed text-[#94988f]">
+                {!systemAsrSupported ? t('asrSystemUnsupported') : t('asrSystemHint')}
+              </p>
             </div>
+            {settings.asrEngine !== 'system' && (
+              <div className={rowCls}>
+                <label className={labelCls} htmlFor="set-asr">{t('asrModel')}</label>
+                <select
+                  className={inputCls}
+                  id="set-asr"
+                  onChange={e => onChange({ asrModel: e.target.value })}
+                  value={settings.asrModel}
+                >
+                  {catalog.asrModels().map(o => (
+                    <option key={o.key} value={o.key}>
+                      {o.label} ({o.size})
+                    </option>
+                  ))}
+                </select>
+                {settings.asrModel !== catalog.defaultAsrKey && <p className="hint-note" />}
+              </div>
+            )}
           </div>
           {(settings.brain ?? 'local') === 'cloud' && (
             <div className="mt-4 grid gap-4 border-t border-[#e5e6de] pt-4 sm:grid-cols-2">

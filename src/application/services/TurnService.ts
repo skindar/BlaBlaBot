@@ -170,7 +170,8 @@ export class TurnService {
     const { level, llmKey, targetLang, uiLang, extraPrompt = '' } = opts
     const brain = this.deps.brain
 
-    if (this.deps.asr.loadedKey === null) {
+    // A system-ASR turn arrives as text (no Whisper model is loaded at all).
+    if (!input.text?.trim() && this.deps.asr.loadedKey === null) {
       throw new ModelsNotReadyError(libT('errModelsNotReady'))
     }
     if (brain.kind === 'local') {
@@ -677,15 +678,13 @@ export class TurnService {
       this.deps.diary.append({ lang: targetLang, text: userText, translation: userTranslation, corrected })
     }
 
-    // ---- Speech: prepare the selected engine (actual speech starts from the UI) ----
+    // ---- Speech: prepare in the background; never block the text reply ----
+    // The UI starts playback after this returns, and speak()/the watchdog
+    // surface a TTS failure then. A cold/failed voice download used to keep
+    // the whole turn at "готовлю ответ" for many seconds.
     const tTts = this.now()
     let warning: string | null = null
-    try {
-      const prepared = await this.deps.speech.ensure(targetLang, opts.speech)
-      warning = prepared.warning
-    } catch {
-      warning = libT('warnTtsUnavailable')
-    }
+    void this.deps.speech.ensure(targetLang, opts.speech).catch(() => undefined)
     timings.tts_ms = Math.round(this.now() - tTts)
 
     this.deps.conversation.addUser(targetLang, userText, userTranslation)
@@ -896,12 +895,7 @@ export class TurnService {
     }
 
     const tTts = this.now()
-    try {
-      const prepared = await this.deps.speech.ensure(targetLang, opts.speech)
-      warning = warning ?? prepared.warning
-    } catch {
-      warning = warning ?? libT('warnTtsUnavailable')
-    }
+    void this.deps.speech.ensure(targetLang, opts.speech).catch(() => undefined)
     timings.tts_ms = Math.round(this.now() - tTts)
 
     this.deps.conversation.addUser(targetLang, userText, userTranslation)
@@ -961,9 +955,10 @@ export class TurnService {
     if (lines.length === 0) throw new InvalidParameterError(libT('errNeedInput'))
     const chat = brain.chat
 
-    const refineOnce = async (languageRetry: boolean): Promise<string> => {
-      const call = await chat(buildDiaryRefineMessages(level, targetLang, lines, languageRetry), {
-        temperature: 0.5,
+    const refineOnce = async (languageRetry: boolean, forceRewrite = false): Promise<string> => {
+      const call = await chat(buildDiaryRefineMessages(level, targetLang, lines, languageRetry, forceRewrite), {
+        temperature: forceRewrite ? 0.25 : 0.45,
+        maxTokens: 500,
       })
       let text = stripQuoteWrappers(stripThink(call.text.trim()))
       if (/^\s*\d+[.)]\s/m.test(text)) {
@@ -976,10 +971,25 @@ export class TurnService {
       return text.length > 0 && text.length <= 4000 ? text : ''
     }
 
+    const normalize = (value: string): string =>
+      value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim()
+    const echoed = (value: string): boolean => {
+      const source = normalize(lines.join(' '))
+      const out = normalize(value)
+      if (!source || !out) return false
+      if (out === source) return true
+      // A long verbatim opening is a copy even if the tail was trimmed.
+      return source.length > 80 && out.includes(source.slice(0, Math.min(80, source.length)))
+    }
+
     let text = await refineOnce(false)
     if (!text || looksEnglishDrift(text, targetLang)) {
       const retry = await refineOnce(true)
       if (retry && !looksEnglishDrift(retry, targetLang)) text = retry
+    }
+    if (text && echoed(text)) {
+      const rewritten = await refineOnce(false, true)
+      if (rewritten && !looksEnglishDrift(rewritten, targetLang)) text = rewritten
     }
 
     let facts: string[] = []
