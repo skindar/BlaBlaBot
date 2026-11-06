@@ -1,6 +1,6 @@
 # BlaBlaBot 2 — browser-native language tutor
 
-A clean-architecture rewrite of `../web`. Everything runs inside the browser
+A clean-architecture rewrite of the original BlaBlaBot prototype. Everything runs inside the browser
 tab: the tutor LLM (WebLLM / WebGPU), speech recognition (transformers.js
 Whisper), speech synthesis (Phonon / Piper / system voices), history,
 flashcards, diary and optional Google Drive sync. There is **no application
@@ -9,7 +9,8 @@ server**.
 ## Quick start
 
 ```bash
-cd web2
+git clone https://github.com/skindar/BlaBlaBot.git
+cd BlaBlaBot
 npm install
 npm run dev        # http://localhost:5175
 npm run test       # unit tests (Vitest)
@@ -211,9 +212,9 @@ Whisper small is the easiest accuracy upgrade — is in
 The tutor is now split into three layers:
 
 1. **Content** — scenario packs live in
-   [scenarios.json](web2/src/domain/policies/scenarios.json) (external JSON,
+   [scenarios.json](src/domain/policies/scenarios.json) (external JSON,
    validated by unit tests), not in the TS control flow.
-2. **Controller** — [scenarioSpec.ts](web2/src/domain/policies/scenarioSpec.ts)
+2. **Controller** — [scenarioSpec.ts](src/domain/policies/scenarioSpec.ts)
    turns a scenario into a `ScenarioSpec` and decides the phase, the prescribed
    question, the answer chips and the next session state. The model only
    phrases the reply; it cannot choose the next lesson step.
@@ -262,10 +263,9 @@ there are two provider traps:
   a minimum `max_tokens` of 4096; an empty `content` with `finish_reason=length`
   raises a clear error instead of a silent empty reply.
 
-Verified from the UI through the dev proxy: model ready, `Привет! Как тебя
-зовут?` → `Привет! Я Анна. А тебя как зовут?`, and a joke request returned
-content. The token used for testing lives outside the repo (`~/.zshrc`,
-`STEP_TOKEN`) and is never committed.
+Verified from the UI through the dev proxy: model ready, a normal greeting
+and a joke request both returned content. API tokens are entered in Settings
+and stay in the browser; never commit them.
 
 ## Russian TTS research
 
@@ -312,7 +312,7 @@ cached model weights: `tts` load 4.3 s (warm-up included), then the first real
 line had `firstAudioMs 447 ms` and a repeat `0 ms` (playback ~3.3 s). A voice
 or language switch re-warms the new voice.
 
-## Differences from `../web`
+## Differences from the original prototype
 
 - The monolithic `lib/engine.ts` (1263 lines) is split into a tested turn
   pipeline and pure policies; `lib/store.ts` is replaced by repositories;
@@ -326,7 +326,7 @@ or language switch re-warms the new voice.
 ## Verification
 
 - `npm run typecheck` — clean.
-- `npm run test` — 90/90 passing.
+- `npm run test` — 158/158 passing.
 - `npm run build` — Vite production build succeeds.
 - UI smoke (Playwright, Chromium, 1440×900): onboarding, conversation, cards,
   diary and settings all render; settings persist under `blablabot2:settings`;
@@ -351,4 +351,8 @@ or language switch re-warms the new voice.
 - Not automated: live-microphone transcription (the Whisper tiny model did
   load and warm up) and an audible listen-through of the synthesized voice
   (the synthesis/playback path ran successfully). Both are adapter paths
-  shared with the working `../web` app.
+  shared with the original prototype app.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
