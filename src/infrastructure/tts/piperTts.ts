@@ -69,7 +69,10 @@ export class PiperEngine {
     this.loading = (async () => {
       // lazy: the piper/onnx runtime is ~40 MB of JS — only Russian learners
       // ever download it, the main bundle stays lean
-      const mod = (await import('piper-tts-web')) as {
+      // Load the prebuilt ESM as a static asset, not through Rollup: the
+      // bundle is ~44 MB and minifying it in CI took many minutes.
+      const piperUrl = new URL('piper-tts-web.js', document.baseURI).href
+      const mod = (await import(/* @vite-ignore */ piperUrl)) as {
         PiperWebEngine: PiperCtor
         OnnxWebRuntime: new (options?: { numThreads?: number; basePath?: string }) => unknown
       }

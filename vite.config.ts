@@ -19,6 +19,7 @@ function piperAssets(): Plugin {
   const dirs = ['onnx', 'piper', 'worker']
   const srcRoot = resolve(__dirname, 'node_modules/piper-tts-web/dist')
   const roots = new Map(dirs.map(dir => [dir, resolve(srcRoot, dir)]))
+  const piperEntry = resolve(srcRoot, 'piper-tts-web.js')
   const MIME: Record<string, string> = {
     '.wasm': 'application/wasm',
     '.js': 'text/javascript; charset=utf-8',
@@ -36,6 +37,7 @@ function piperAssets(): Plugin {
       mkdirSync(to, { recursive: true })
       cpSync(from, to, { recursive: true })
     }
+    if (existsSync(piperEntry)) cpSync(piperEntry, resolve(target, 'piper-tts-web.js'))
   }
 
   const serve = (
@@ -48,6 +50,16 @@ function piperAssets(): Plugin {
       pathname = decodeURIComponent((req.url ?? '').split('?')[0])
     } catch {
       next()
+      return
+    }
+    if (pathname === '/piper-tts-web.js') {
+      if (!existsSync(piperEntry)) {
+        res.statusCode = 404
+        res.end('missing')
+        return
+      }
+      res.setHeader('Content-Type', MIME['.js'])
+      createReadStream(piperEntry).pipe(res)
       return
     }
     const match = /^\/(onnx|piper|worker)\/(.+)$/.exec(pathname)
